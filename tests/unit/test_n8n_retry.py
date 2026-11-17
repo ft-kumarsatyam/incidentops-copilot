@@ -61,3 +61,19 @@ def test_gives_up_after_the_configured_attempts(monkeypatch: pytest.MonkeyPatch)
 def test_refuses_unapproved_payloads() -> None:
     with pytest.raises(ValueError, match="explicit approval"):
         request_actions("https://n8n", {"approval": None, "idempotency_key": "k"})
+
+
+def test_sends_the_action_token_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_post(monkeypatch, [200])
+
+    request_actions("https://n8n", PAYLOAD, token="s3cret")
+
+    assert calls[0]["headers"]["Authorization"] == "Bearer s3cret"
+
+
+def test_omits_the_authorization_header_without_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_post(monkeypatch, [200])
+
+    request_actions("https://n8n", PAYLOAD)
+
+    assert "Authorization" not in calls[0]["headers"]

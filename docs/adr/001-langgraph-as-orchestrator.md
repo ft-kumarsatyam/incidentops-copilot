@@ -1,42 +1,38 @@
-# ADR 001: LangGraph as primary orchestrator
+# ADR 001: LangGraph as the orchestrator
 
-**Status:** Accepted  
+**Status:** Accepted
 **Date:** 2026-11-17
 
 ## Context
 
-We need a system that:
+The workflow must loop (retry research when evidence is missing), branch (confident,
+conflicted, or incomplete), pause for a human, and survive a restart while it waits.
+It should also be easy to explain on a whiteboard.
 
-- Decomposes goals into multi-step work
-- Loops (re-fetch data, revise drafts)
-- Branches on ambiguity and errors
-- Supports **human-in-the-loop** interrupts
-- Is demonstrable on a resume as "agentic," not "one prompt"
-
-Alternatives considered: linear Python script, CrewAI role crews, n8n-only automation, Zapier.
+Alternatives considered: a linear Python script, a CrewAI role crew, n8n alone, Zapier.
 
 ## Decision
 
-Use **LangGraph** as the core orchestrator for agent logic. Use **n8n** optionally for scheduling and lightweight integrations.
+Use **LangGraph** for the reasoning workflow. Use **n8n** only for the integrations
+that need credentials and retries (Slack, GitHub).
 
 ## Rationale
 
 | Option | Pros | Cons |
-|--------|------|------|
-| Linear script | Simple | No first-class cycles, weak HITL story |
-| CrewAI | Fast multi-role setup | Less explicit state machine for interviews |
-| n8n-only | Great for cron/webhooks | LLM branching in nodes gets messy at scale |
-| **LangGraph** | Explicit graph, checkpoints, interrupts | Learning curve |
-
-LangGraph maps cleanly to whiteboard explanations: nodes, edges, conditional routing, state reducers.
+|---|---|---|
+| Linear script | Simple | No first-class cycles, weak pause and resume |
+| CrewAI | Fast to set up roles | Control flow is implicit, harder to bound and test |
+| n8n only | Great for webhooks and SaaS | Branching reasoning and typed state get messy |
+| **LangGraph** | Explicit state machine, checkpointer, `interrupt()`, reducers | Learning curve |
 
 ## Consequences
 
-- State schema is centralized (`AgentState` per workflow).
-- CrewAI may be referenced in docs as comparison only unless we add a thin adapter later.
-- n8n exports live under `n8n/` and call Python via webhook or CLI.
+- State is centralized in `IncidentState` (`workflows/incident/state.py`).
+- Approval is an `interrupt()`; a decision resumes the thread with `Command(resume=...)`.
+- The critic loop is bounded by `MAX_RESEARCH_ATTEMPTS`, so cost and latency have a ceiling.
+- Persistence is a separate decision: [ADR 002](002-sqlite-checkpointer.md).
 
 ## References
 
 - [Architecture](../ARCHITECTURE.md)
-- [Walkthrough](../WALKTHROUGH.md)
+- [AI design](../AI_DESIGN.md)

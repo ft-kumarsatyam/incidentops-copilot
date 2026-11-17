@@ -45,6 +45,11 @@ def test_old_index_schema_degrades_to_no_results(tmp_path: Path) -> None:
     database = tmp_path / "old.db"
     with closing(sqlite3.connect(database)) as connection:
         connection.execute("CREATE VIRTUAL TABLE runbook_chunks USING fts5(path, title, content)")
+        # A matching row matters: the column-count mismatch only fails once a row is read.
+        connection.execute(
+            "INSERT INTO runbook_chunks VALUES ('old.md', 'Rollback', 'anything here at all')"
+        )
+        connection.commit()
 
     assert search_runbooks(database, "anything here") == []
 

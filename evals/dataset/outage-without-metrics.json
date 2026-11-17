@@ -1,0 +1,21 @@
+{
+  "name": "outage-without-metrics",
+  "input": {
+    "run_id": "eval-outage",
+    "channel_id": "C-INCIDENTS",
+    "thread_ts": "1700000000.0001",
+    "reporter": "U-ONCALL",
+    "summary": "Total outage reported by support",
+    "service": "checkout-api",
+    "owner": "payments-oncall",
+    "symptoms": [
+      "total outage"
+    ],
+    "monitoring": {},
+    "github": {}
+  },
+  "expect": {
+    "status": "awaiting_approval",
+    "severity": "SEV-1"
+  }
+}

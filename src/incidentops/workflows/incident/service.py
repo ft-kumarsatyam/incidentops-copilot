@@ -13,6 +13,8 @@ import httpx
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
+from incidentops.agents.factory import build_provider
+from incidentops.agents.resilient import TriageProvider
 from incidentops.core.config import Settings
 from incidentops.core.errors import IncidentConflictError, IncidentNotFoundError
 from incidentops.core.logging import bound_context, get_logger
@@ -35,13 +37,16 @@ class IncidentService:
         *,
         repo: IncidentRepo | None = None,
         dispatcher: Dispatcher = request_actions,
+        provider: TriageProvider | None = None,
     ) -> None:
         self.settings = settings
         self.repo = repo or IncidentRepo(settings.database_path)
         self._dispatcher = dispatcher
         self._connection = sqlite3.connect(settings.database_path, check_same_thread=False)
         self._connection.execute("PRAGMA journal_mode=WAL")
-        self._graph = build_incident_graph(settings, SqliteSaver(self._connection))
+        self._graph = build_incident_graph(
+            settings, SqliteSaver(self._connection), provider or build_provider(settings)
+        )
 
     def close(self) -> None:
         self._connection.close()

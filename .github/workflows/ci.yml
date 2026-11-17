@@ -35,6 +35,8 @@ jobs:
         run: .venv/bin/mypy
       - name: Test with coverage
         run: .venv/bin/pytest -q --cov
+      - name: Evals (offline rules baseline)
+        run: .venv/bin/python -m evals.run_evals --provider rules
 
   docker:
     runs-on: ubuntu-latest

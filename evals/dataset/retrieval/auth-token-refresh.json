@@ -1,0 +1,7 @@
+{
+  "name": "auth-token-refresh",
+  "query": "session refresh failing for customers",
+  "prefer": "auth-api",
+  "expect_paths": ["auth-api.md"],
+  "k": 3
+}

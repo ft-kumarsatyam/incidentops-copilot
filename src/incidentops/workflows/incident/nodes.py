@@ -19,10 +19,14 @@ from incidentops.agents.resilient import TriageProvider
 from incidentops.agents.schemas import AIResult, ProposedAction, Triage, TriageContext
 from incidentops.core.config import Settings
 from incidentops.core.logging import get_logger
+from incidentops.rag import (
+    RunbookRetriever,
+    build_runbook_retriever,
+    expand_runbook_query,
+    rewrite_metadata,
+)
 from incidentops.tools.github import fetch_recent_commit, is_valid_repo, normalize_github
 from incidentops.tools.monitoring import normalize_monitoring
-from incidentops.tools.query_rewrite import expand_runbook_query, rewrite_metadata
-from incidentops.tools.retrieval import RunbookRetriever, build_runbook_retriever
 from incidentops.workflows.incident.state import IncidentState
 
 log = get_logger(__name__)

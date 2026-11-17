@@ -1,4 +1,4 @@
-from incidentops.tools.query_rewrite import expand_runbook_query
+from incidentops.rag import expand_runbook_query
 
 
 def test_semantic_purchase_query_expands_checkout_terms() -> None:

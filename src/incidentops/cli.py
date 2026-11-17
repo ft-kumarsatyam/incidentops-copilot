@@ -7,7 +7,7 @@ from typing import Any
 
 from incidentops.core.config import Settings
 from incidentops.core.logging import configure_logging
-from incidentops.tools.retrieval import build_runbook_retriever, index_runbooks_for_settings
+from incidentops.rag import build_runbook_retriever, index_runbooks_for_settings
 from incidentops.workflows.incident import IncidentService
 
 

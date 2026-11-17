@@ -21,7 +21,7 @@ make web-test     # just the UI typecheck and tests
 ```
 
 Individual targets: `make lint`, `make format`, `make typecheck`, `make test`,
-`make cov` (fails under 85%), `make eval`. Run `make help` for the full list.
+`make cov` (fails under 85%), `make eval`, `make eval-retrieval`. Run `make help` for the full list.
 CI runs the same gates on Python 3.11 and 3.13, builds the UI, and builds the
 Docker image.
 
@@ -32,7 +32,7 @@ Docker image.
 | An endpoint | `src/incidentops/api/routes/` |
 | Workflow steps or routing | `src/incidentops/workflows/incident/` |
 | What the AI may propose | `src/incidentops/agents/guardrails.py`, `prompts/` |
-| Retrieval | `src/incidentops/tools/runbooks.py`, `runbooks/` |
+| Runbook RAG | `src/incidentops/rag/`, `runbooks/`, `evals/dataset/retrieval/` ([design](docs/RAG_SYSTEM_DESIGN.md)) |
 | The UI | `web/src/` |
 | The n8n flow | `n8n/incident-ops.json` and its contract test |
 

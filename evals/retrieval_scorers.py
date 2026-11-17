@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from incidentops.tools.query_rewrite import expand_runbook_query
+from incidentops.rag import expand_runbook_query
 
 
 def _paths_at_k(hits: list[dict[str, Any]], k: int) -> list[str]:

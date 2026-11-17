@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from incidentops.core.config import Settings
-from incidentops.tools.runbooks import index_runbooks
+from incidentops.rag import index_runbooks
 from incidentops.workflows.incident import IncidentService
 
 ROOT = Path(__file__).parents[1]

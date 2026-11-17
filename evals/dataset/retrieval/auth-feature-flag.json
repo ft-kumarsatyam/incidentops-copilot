@@ -1,0 +1,7 @@
+{
+  "name": "auth-feature-flag",
+  "query": "disable new auth path flag",
+  "prefer": "auth-api",
+  "expect_paths": ["auth-api.md"],
+  "k": 3
+}

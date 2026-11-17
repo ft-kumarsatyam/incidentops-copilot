@@ -39,14 +39,20 @@ A five-agent specialist graph was benchmarked and **rejected** (no quality gain,
 higher latency). See [ADR 006](adr/006-reject-specialist-swarm-for-current-scope.md)
 and [evals/architecture_report.md](../evals/architecture_report.md).
 
-## RAG
+## RAG (show this in system-design rounds)
 
-Runbooks are chunked by Markdown heading and indexed with **SQLite FTS5** (BM25).
-Actions must cite `runbook:<path>` that exists in the retrieved hits. Optional
-**hybrid** retrieval (FTS candidates + local embeddings) sits behind
-`RUNBOOK_RETRIEVAL=hybrid` and is measured with `make eval-retrieval`. Default
-remains FTS until the labeled retrieval suite justifies a switch
-([ADR 007](adr/007-hybrid-runbook-retrieval.md)).
+Dedicated package: [`src/incidentops/rag/`](../src/incidentops/rag/) (`fts`, `rewrite`,
+`hybrid`, `retriever`). Full narrative with diagrams:
+
+**[RAG system design](RAG_SYSTEM_DESIGN.md)**
+
+- Chunking + `doc` title indexing so service names match symptom vocabulary
+- **Deterministic query rewrite** (no LLM in the retrieval path by default)
+- **Hybrid** optional: FTS shortlist → dense rerank (`pip install '.[rag]'`)
+- **11 labeled queries**, CI on `fts` + `rewrite`; report: [evals/retrieval_report.md](../evals/retrieval_report.md)
+- Retrieval quality is a **grounding** requirement—not a separate “chat with PDF” feature
+
+Repo layout for reviewers: [REPOSITORY_MAP.md](REPOSITORY_MAP.md) · [evals/README.md](../evals/README.md).
 
 ## Evidence (reproduce locally)
 

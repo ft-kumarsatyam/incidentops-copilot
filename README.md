@@ -61,7 +61,8 @@ Prefer the terminal? `make demo` runs one incident end to end.
 | **Reliability** | Idempotent start and decide, atomic run claiming, n8n dispatch retries with backoff, `failed` state with a retry button, append-only audit log |
 | **Platform** | FastAPI, JSON logs with request and run IDs, optional OpenTelemetry, `/health` and `/ready`, rate limiting, CORS allowlist, body cap, fail-closed auth |
 | **Integrations** | n8n workflow for Slack intake, a Slack summary that links to the review page, GitHub issue creation, shared-secret check and idempotency gate |
-| **Quality** | 112 Python tests (94% coverage), 48 UI tests, mypy and ruff clean, eval suite, CI for backend, web and Docker |
+| **RAG** | Dedicated `rag/` package: FTS5 + deterministic query rewrite; optional hybrid embeddings; [labeled retrieval evals](evals/retrieval_report.md) ([design doc](docs/RAG_SYSTEM_DESIGN.md)) |
+| **Quality** | 379+ Python tests (94% coverage), 48 UI tests, mypy and ruff clean, eval suites (incident, guardrails, **retrieval**), CI |
 
 ## How it works
 
@@ -197,16 +198,19 @@ src/incidentops/
   api/            FastAPI app factory, routes, auth, SSE, middleware
   agents/         Provider protocol, rules, Claude, guardrails, prompts
   workflows/      LangGraph state, nodes, graph, and the IncidentService
+  rag/            Runbook RAG: FTS index, query rewrite, hybrid rerank, retriever API
+  tools/          GitHub, monitoring, n8n (RAG shims re-export rag.*)
   persistence/    SQLite incident index and audit log
-  tools/          Runbook search (FTS5), GitHub, monitoring, n8n client
   core/           Settings, logging, redaction, tracing, errors
 web/              React + Vite + TypeScript UI (builds into the package)
-evals/            Labeled incidents, scorers, runner, report
+evals/            Incident, guardrail, retrieval, and architecture benchmarks
 n8n/              Importable workflow and its setup notes
-runbooks/         Markdown runbooks searched during research
+runbooks/         Markdown corpus indexed by rag/
 tests/            Unit, workflow, API, agent and contract tests
-docs/             Architecture, AI design, API, deployment, ADRs
+docs/             Architecture, RAG system design, portfolio, ADRs
 ```
+
+Full map: [docs/REPOSITORY_MAP.md](docs/REPOSITORY_MAP.md).
 
 ## For reviewers (portfolio)
 
@@ -226,6 +230,9 @@ Short path for interviews and hiring managers:
 | Read this | To learn |
 |---|---|
 | [Portfolio guide](docs/PORTFOLIO.md) | Demo script, talking points, evidence tables |
+| [RAG system design](docs/RAG_SYSTEM_DESIGN.md) | Chunking, rewrite, hybrid, eval metrics, interview narrative |
+| [Repository map](docs/REPOSITORY_MAP.md) | Where every package and eval suite lives |
+| [Eval suites](evals/README.md) | How incident, retrieval, and guardrail benchmarks work |
 | [Project brief](docs/PROJECT_BRIEF.md) | The two-page summary for engineering leaders: decisions, evidence, limits |
 | [Architecture](docs/ARCHITECTURE.md) | Components, state, lifecycle, failure behavior |
 | [AI design](docs/AI_DESIGN.md) | Agent roles, guardrails, evals, fallback |

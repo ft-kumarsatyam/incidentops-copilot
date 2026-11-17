@@ -13,10 +13,12 @@ Symptom language often does not match runbook headings (for example “users can
 complete purchases”). Two mitigations were added without changing the triage graph:
 
 1. **Query rewrite** — deterministic service aliases and symptom phrases
-   ([`src/incidentops/tools/query_rewrite.py`](../../src/incidentops/tools/query_rewrite.py)).
+   ([`src/incidentops/rag/rewrite.py`](../../src/incidentops/rag/rewrite.py)).
 2. **Hybrid retrieval** — FTS shortlist, then dense rerank with local embeddings
-   stored in the same SQLite file ([`src/incidentops/tools/retrieval.py`](../../src/incidentops/tools/retrieval.py)),
+   stored in the same SQLite file ([`src/incidentops/rag/hybrid.py`](../../src/incidentops/rag/hybrid.py)),
    enabled with `RUNBOOK_RETRIEVAL=hybrid` and the `[rag]` optional extra (`fastembed`).
+
+See also [RAG system design](../RAG_SYSTEM_DESIGN.md).
 
 ## Measurement
 

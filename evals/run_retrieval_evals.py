@@ -15,8 +15,12 @@ from pathlib import Path
 from typing import Any
 
 from evals.retrieval_scorers import effective_query, score_case
-from incidentops.tools.retrieval import HybridRetriever, index_runbooks_with_embeddings
-from incidentops.tools.runbooks import index_runbooks, search_runbooks
+from incidentops.rag import (
+    HybridRetriever,
+    index_runbooks,
+    index_runbooks_with_embeddings,
+    search_runbooks,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = Path(__file__).parent / "dataset" / "retrieval"

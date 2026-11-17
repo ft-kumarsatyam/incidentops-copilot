@@ -3,11 +3,7 @@ from pathlib import Path
 import pytest
 
 from incidentops.core.config import Settings
-from incidentops.tools.retrieval import (
-    FtsRetriever,
-    build_runbook_retriever,
-    index_runbooks_for_settings,
-)
+from incidentops.rag import FtsRetriever, build_runbook_retriever, index_runbooks_for_settings
 
 
 def test_build_runbook_retriever_defaults_to_fts(tmp_path: Path) -> None:

@@ -15,7 +15,7 @@ from incidentops.api.middleware import install_middleware
 from incidentops.api.routes import health, incidents
 from incidentops.core.config import Settings
 from incidentops.core.logging import configure_logging, get_logger
-from incidentops.tools.retrieval import index_runbooks_for_settings
+from incidentops.rag import index_runbooks_for_settings
 from incidentops.workflows.incident.service import IncidentService
 
 PACKAGED_UI = Path(__file__).resolve().parents[1] / "static"

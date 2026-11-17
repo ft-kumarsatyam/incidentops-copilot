@@ -1,0 +1,7 @@
+{
+  "name": "checkout-rollback-deploy",
+  "query": "rollback after bad deploy",
+  "prefer": "checkout-api",
+  "expect_paths": ["checkout-api.md"],
+  "k": 3
+}

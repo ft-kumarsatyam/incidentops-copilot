@@ -83,6 +83,6 @@ def search_runbooks(
                 "score LIMIT :limit",
                 {"query": expression, "name": name, "limit": limit},
             ).fetchall()
-    except sqlite3.OperationalError:
+    except sqlite3.Error:
         return []  # index built by an older version: re-run `incidentops runbooks index`
     return [dict(row) for row in rows]

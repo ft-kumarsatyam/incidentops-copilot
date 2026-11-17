@@ -1,206 +1,224 @@
 # IncidentOps Copilot
 
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-1C3C3C)](https://langchain-ai.github.io/langgraph/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+**An AI incident-triage assistant that never acts without a human saying yes.**
 
-A Slack-native incident coordinator built with Python, LangGraph, and n8n. It
-turns an incomplete incident report into evidence, severity, ownership, and
-proposed actions—then requires human approval before anything changes.
+A teammate reports "checkout is throwing 5xx" in Slack. Copilot gathers the
+evidence, finds the matching runbook, proposes a severity and a short list of
+reversible actions, and waits. The incident commander reviews it in a web UI
+(or in Slack), ticks the actions they want, and approves. Only then does
+anything leave the building.
 
-```text
-Slack → n8n → intake → research → assess → critic ↺ → approval → action/timeline
-```
+[![CI](https://github.com/ft-kumarsatyam/incidentops-copilot/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+![License MIT](https://img.shields.io/badge/license-MIT-green)
 
-This is a focused, testable workflow rather than an open-ended agent swarm. It
-demonstrates bounded autonomy, evidence-backed decisions, retry limits,
-idempotency, durable checkpoints, and human escalation.
+## Try it in 60 seconds
 
-## What it does
-
-- Accepts incident reports from a Slack thread through n8n.
-- Normalizes supplied GitHub and monitoring evidence.
-- Retrieves relevant Markdown runbook sections with local SQLite FTS5 search.
-- Assigns a deterministic severity and proposes reversible next actions.
-- Re-runs research when required evidence is missing.
-- Escalates ambiguous incidents to `needs_human` after two attempts.
-- Pauses at `awaiting_approval` before n8n performs an external write.
-- Preserves a stable `run_id`, timeline, and resumable checkpoint.
-
-## Quick start
-
-### Requirements
-
-- Python 3.11 or newer
-- `pip`
-- Docker Compose for the local API + n8n stack
-- Slack only for live integration testing
-
-### Install
+No API keys, no Slack, no n8n. The offline rules engine runs everything.
 
 ```bash
 git clone https://github.com/ft-kumarsatyam/incidentops-copilot.git
 cd incidentops-copilot
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-cp .env.example .env
+make setup && make web-build && make dev
 ```
 
-No API key is required for the deterministic local demo.
+Open <http://localhost:8000>, click **Load a sample incident**, and watch the
+pipeline run. Open the same page in a second tab and approve from there: the
+first tab updates live.
 
-### Run the demo
+Prefer Docker? `docker compose up --build` starts the API, the UI and n8n.
+
+Prefer the terminal? `make demo` runs one incident end to end.
+
+## Why this is different
+
+| Most "AI agent" demos | IncidentOps Copilot |
+|---|---|
+| The model decides and acts | The model **proposes**; a person approves; n8n executes |
+| Trusts whatever the model says | Every action must cite evidence or a runbook, checked **in code** |
+| Needs an API key to run | Works fully offline; Claude is an upgrade, not a requirement |
+| One failure and the run is lost | Durable runs survive restarts; failed dispatches are retryable |
+| Double-click sends twice | Idempotent end to end: one approval, one ticket |
+| Prompt injection is "out of scope" | Incident text is fenced and redacted, and the model cannot add actions outside a closed list |
+| "It seems to work" | 10 labeled incidents scored on every pull request |
+
+## What you get
+
+| Area | Highlights |
+|---|---|
+| **Web UI** | Guided first run, live queue, pipeline stepper, evidence with runbook citations, per-action approval checklist, confirm dialog that states exactly what will be sent, light/dark themes, keyboard and mobile friendly |
+| **AI layer** | Triage and critic agents with structured output, deterministic rules fallback, guardrails, confidence ceiling from missing facts, bounded critic loop |
+| **Workflow** | LangGraph state machine with a SQLite checkpointer; approval is a real `interrupt()` and resume, not a re-run |
+| **Reliability** | Idempotent start and decide, atomic run claiming, n8n dispatch retries with backoff, `failed` state with a retry button, append-only audit log |
+| **Platform** | FastAPI, JSON logs with request and run IDs, optional OpenTelemetry, `/health` and `/ready`, rate limiting, CORS allowlist, body cap, fail-closed auth |
+| **Integrations** | n8n workflow for Slack intake, Slack approval message, GitHub issue creation, shared-secret check and idempotency gate |
+| **Quality** | 112 Python tests (94% coverage), 48 UI tests, mypy and ruff clean, eval suite, CI for backend, web and Docker |
+
+## How it works
+
+```mermaid
+flowchart LR
+  Slack["Slack report"] --> N8nIn["n8n intake"]
+  Web["Web UI"] --> API
+  N8nIn --> API["FastAPI service"]
+  API --> Graph["LangGraph workflow"]
+  Graph --> Research["Research: monitoring, GitHub, runbooks"]
+  Graph --> AI["Triage and critic agents"]
+  AI -. "no key or failure" .-> Rules["Rules engine"]
+  Graph --> DB[("SQLite: checkpoints, incidents, audit")]
+  API -- "approved only" --> N8nOut["n8n actions webhook"]
+  N8nOut --> GitHub["GitHub issue"]
+  N8nOut --> SlackOut["Slack thread"]
+```
+
+Python reasons. n8n holds the Slack and GitHub credentials and performs every
+write. The service never stores those credentials.
+
+```mermaid
+stateDiagram-v2
+  [*] --> intake
+  intake --> research
+  research --> assess
+  assess --> critic
+  critic --> research: evidence missing, attempts left
+  critic --> finalize
+  finalize --> awaiting_approval: confident enough
+  finalize --> needs_human: conflict, gaps or low confidence
+  awaiting_approval --> succeeded: approve, dispatch ok
+  awaiting_approval --> failed: approve, dispatch failed
+  failed --> succeeded: retry dispatch
+  awaiting_approval --> cancelled: reject
+```
+
+The AI design, including what the model may and may not do, is in
+[docs/AI_DESIGN.md](docs/AI_DESIGN.md).
+
+## Quick start in detail
+
+Requirements: Python 3.11+, Node 22+ (only to build the UI), and optionally
+[uv](https://docs.astral.sh/uv/) for faster installs.
 
 ```bash
-workflow-run check
-workflow-run runbooks index
-workflow-run runbooks query "checkout 5xx rollback"
-workflow-run incident --fixture tests/fixtures/incident_complete.json
-workflow-run incident --fixture tests/fixtures/incident_ambiguous.json
+make setup        # virtualenv, dependencies, .env, web dependencies, git hooks
+make web-build    # build the UI into the Python package (served at /)
+make dev          # API on :8000 with reload, auth relaxed (INCIDENTOPS_ENV=dev)
+make web-dev      # optional: UI hot reload on :5173, proxied to the API
 ```
 
-The complete fixture ends at `awaiting_approval`. The ambiguous fixture retries
-research twice and ends at `needs_human` instead of inventing missing facts.
-
-To exercise an explicit decision:
+Command line:
 
 ```bash
-workflow-run incident \
-  --fixture tests/fixtures/incident_complete.json \
-  --approval approved
+incidentops check                                   # verify configuration
+incidentops incident --fixture tests/fixtures/incident_complete.json --approval approved
+incidentops runbooks query "checkout 5xx after deploy"
 ```
 
-### Open the response dashboard
+Run `make help` for every target.
 
-Start the API and open [http://localhost:8000](http://localhost:8000):
+### Turn on Claude
+
+Add your key to `.env` and restart. Nothing else changes.
 
 ```bash
-uvicorn incidentops.api:app --reload
+ANTHROPIC_API_KEY=sk-ant-...
+AI_PROVIDER=auto      # auto | claude | rules
 ```
 
-The dashboard reads the same checkpoints as Slack/n8n. It shows severity,
-evidence, cited runbook sections, response timeline, and approval controls.
-When `INCIDENTOPS_API_KEY` is configured, enter it in the dashboard header; it
-is retained only in browser session storage.
-
-### Run the API and n8n
-
-```bash
-docker compose up --build
-curl http://localhost:8000/health
-```
-
-The API runs at `http://localhost:8000`; n8n runs at
-`http://localhost:5678`. Import `/workflows/incident-ops.json` from the mounted
-workflow directory.
-
-## Architecture
-
-| Layer | Responsibility |
-| --- | --- |
-| Slack + n8n | Ingress, credentials, approval UI, and outbound actions |
-| Python + LangGraph | State, research loop, assessment, critique, and checkpoints |
-| GitHub + monitoring | Read-only investigation evidence |
-| Incident commander | Approves, rejects, or edits proposed actions |
-
-The Python graph never writes directly to Slack, Jira, or GitHub. It returns a
-proposal to n8n, which validates the approval and uses the incident `run_id` as
-an idempotency key before executing an action.
+With `auto`, any model error, timeout, or answer that fails validation falls
+back to the rules engine and is recorded on the incident, so the run still
+completes. `make eval-claude` scores Claude on the same labeled incidents.
 
 ## Configuration
 
-Copy `.env.example` to `.env` and set only the integrations you need:
+Copy [.env.example](.env.example). The settings you will touch most:
 
-| Variable | Purpose | Required |
-| --- | --- | --- |
-| `GITHUB_TOKEN` | Read-only incident investigation | No |
-| `N8N_ACTION_WEBHOOK_URL` | Approved action callback | No |
-| `INCIDENTOPS_API_KEY` | Shared key between n8n and the Python API | Production |
-| `INCIDENTOPS_URL` | API base URL used by n8n | n8n |
-| `N8N_PUBLIC_URL` | Public approval-link base URL | Slack |
-| `N8N_ENCRYPTION_KEY` | Protect n8n credentials at rest | Production |
-| `SLACK_BOT_TOKEN` | Post approval messages | Live Slack |
-| `GITHUB_REPO` | Repository receiving approved incident issues | Live action |
-| `CHECKPOINT_DIR` | Local checkpoint location | No |
-| `RUNBOOK_DIR` | Markdown source directory for grounded retrieval | No |
-| `RUNBOOK_DB` | Generated SQLite FTS5 index | No |
-| `MAX_RUNBOOK_RESULTS` | Maximum cited chunks per incident | No |
-| `AUTO_INDEX_RUNBOOKS` | Rebuild index at API startup | Containers |
-| `MAX_RESEARCH_ATTEMPTS` | Bounded research retries | No |
-| `CONFIDENCE_THRESHOLD` | Minimum automatic confidence | No |
-| `LANGSMITH_API_KEY` | Optional LangSmith tracing | No |
-| `OPENAI_API_KEY` | Reserved for a future LLM assessor | No |
+| Variable | Default | Purpose |
+|---|---|---|
+| `INCIDENTOPS_ENV` | `dev` | Anything other than `dev` requires an API key (fail-closed) |
+| `INCIDENTOPS_API_KEY` | | Sent as `X-API-Key`; paste it into **Settings** in the UI |
+| `AI_PROVIDER` | `auto` | `auto`, `claude`, or `rules` |
+| `ANTHROPIC_API_KEY` | | Enables Claude |
+| `TRIAGE_MODEL` / `CRITIC_MODEL` | `claude-sonnet-5-5` / `claude-haiku-5-5` | Models per role |
+| `CONFIDENCE_THRESHOLD` | `0.8` | Below this, the run goes to a human instead of approval |
+| `MAX_RESEARCH_ATTEMPTS` | `2` | Bound on the critic-to-research loop |
+| `N8N_ACTION_WEBHOOK_URL` | | Where approved actions are sent |
+| `N8N_ACTION_TOKEN` | | Shared secret n8n checks on that webhook |
+| `DATABASE_PATH` | `.data/incidentops.db` | Checkpoints, incident index, audit log |
+| `CORS_ORIGINS` | `[]` | JSON list of allowed browser origins |
 
-Never commit `.env`; it is excluded by `.gitignore`.
+## Slack and n8n
 
-## n8n and Slack integration
+1. Start the stack: `docker compose up --build`.
+2. Import [n8n/incident-ops.json](n8n/incident-ops.json) into n8n.
+3. Set the environment values listed in [n8n/README.md](n8n/README.md).
+4. Point Slack events at `/webhook/incidentops/intake`.
 
-1. Import [`n8n/incident-ops.json`](n8n/incident-ops.json) into n8n.
-2. Configure the environment values documented in [`n8n/README.md`](n8n/README.md).
-3. Start `docker compose up --build`.
-4. Point Slack events at n8n's `incidentops/intake` webhook.
-5. Test intake, approval, rejection, and duplicate delivery.
+The Slack approval message links back to the incident page, so the commander
+can review the evidence and approve in the UI. Duplicate Slack deliveries and
+double clicks are absorbed by idempotency keys on both sides.
 
-The checked-in n8n workflow is a portable template. Credential IDs and the
-final Jira or GitHub action are intentionally selected in the target n8n
-instance.
+## Evaluation
 
-## Development
+`make eval` scores 10 labeled incidents: severity, missing-field detection,
+conflict detection, correct runbook, grounding, and safety (including a prompt
+injection case). The offline rules baseline currently passes **10 of 10** and
+runs in CI on every pull request. Full results are in
+[evals/report.md](evals/report.md). `make eval-claude` runs the same suite
+against Claude when you have a key.
 
-Run all quality gates before opening a pull request:
-
-```bash
-ruff check src tests scripts
-ruff format --check src tests scripts
-mypy src
-pytest
-```
-
-Project layout:
+## Project structure
 
 ```text
-src/incidentops/       Python package and CLI
-  tools/                       Monitoring and n8n boundaries
-  workflows/incident/          State, graph, and node implementations
-tests/                         Graph, contract, and metric tests
-tests/fixtures/                Deterministic incident payloads
-n8n/incident-ops.json          Importable orchestration workflow
-docs/                          Architecture, contracts, and demo guides
-scripts/measure_impact.py      Reproducible impact calculator
+src/incidentops/
+  api/            FastAPI app factory, routes, auth, SSE, middleware
+  agents/         Provider protocol, rules, Claude, guardrails, prompts
+  workflows/      LangGraph state, nodes, graph, and the IncidentService
+  persistence/    SQLite incident index and audit log
+  tools/          Runbook search (FTS5), GitHub, monitoring, n8n client
+  core/           Settings, logging, redaction, tracing, errors
+web/              React + Vite + TypeScript UI (builds into the package)
+evals/            Labeled incidents, scorers, runner, report
+n8n/              Importable workflow and its setup notes
+runbooks/         Markdown runbooks searched during research
+tests/            Unit, workflow, API, agent and contract tests
+docs/             Architecture, AI design, API, deployment, ADRs
 ```
+
+## Documentation
+
+| Read this | To learn |
+|---|---|
+| [Architecture](docs/ARCHITECTURE.md) | Components, state, lifecycle, failure behavior |
+| [AI design](docs/AI_DESIGN.md) | Agent roles, guardrails, evals, fallback |
+| [API contract](docs/API_CONTRACT.md) | Endpoints, SSE, errors |
+| [Deployment](docs/DEPLOYMENT.md) | Environments, secrets, scaling, backups |
+| [Walkthrough](docs/WALKTHROUGH.md) | A guided tour with failure drills |
+| [Decision records](docs/adr) | Why LangGraph, SQLite, provider fallback, SSE, React |
+| [Security](SECURITY.md) | Threat model and reporting |
+| [Demo script](docs/DEMO_SCRIPT.md) | A 90-second demo |
+| [Portfolio guide](docs/RESUME_AND_PORTFOLIO.md) | Honest ways to describe this project |
+| [Contributing](CONTRIBUTING.md) | Setup, quality gates, how to extend |
 
 ## Measuring impact
 
 ```bash
-python scripts/measure_impact.py \
-  --manual-minutes 20 \
-  --automated-minutes 4 \
-  --incidents 25
+python scripts/measure_impact.py --manual-minutes 20 --automated-minutes 4 --incidents 25
 ```
 
-The script prints its assumptions with the result. Replace synthetic inputs
-with pilot data before making an impact claim. Useful measures include median
-time to acknowledge, coordination steps removed, and the percentage of
-ambiguous incidents correctly escalated.
+The script prints its assumptions with the result. The inputs are estimates:
+replace them with pilot data before you make an impact claim.
 
-## Documentation
+## Status and roadmap
 
-- [Architecture and graph lifecycle](docs/ARCHITECTURE.md)
-- [Step-by-step walkthrough](docs/WALKTHROUGH.md)
-- [API contract](docs/API_CONTRACT.md)
-- [Demo script](docs/DEMO_SCRIPT.md)
-- [Benchmark learnings](docs/BENCHMARK_LEARNINGS.md)
-- [Resume and portfolio guide](docs/RESUME_AND_PORTFOLIO.md)
-- [Contributing guide](CONTRIBUTING.md)
+Suitable today for local use, demos, and a pilot behind your own network
+controls. Known limits and the path forward:
 
-## Status and scope
-
-The fixture-driven graph and integration contract are suitable for local demos
-and extension. Before production use, add an authenticated HTTP boundary,
-durable checkpoint storage, Slack signature verification, production-grade
-idempotency storage, observability, and service-specific authorization.
+- SQLite and the in-process event bus mean one API instance. For several
+  instances, move to Postgres and a shared pub/sub ([DEPLOYMENT](docs/DEPLOYMENT.md)).
+- Slack signature verification is not enforced in the template workflow yet.
+- Claude results are not yet published; the eval harness is ready for them.
+- Planned: Jira action node, per-user login, richer monitoring connectors.
 
 ## License
 
-Released under the [MIT License](LICENSE).
+MIT. See [LICENSE](LICENSE).

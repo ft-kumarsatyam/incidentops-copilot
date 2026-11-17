@@ -1,5 +1,10 @@
 # Benchmark learnings: Ruflo vs DeepTutor → this repo
 
+> **Historical note.** This was written while positioning the project. Since then it
+> gained a web UI, Claude-backed triage with a rules fallback, durable runs and an eval
+> suite, so the "CLI + Slack draft" and "~500 lines" rows describe the starting point,
+> not today's repo. See the [README](../README.md) for the current picture.
+
 Sources (narrow slices; full repos are 4.5k–8.7k files):
 
 | Repo | What it is | Size signal |
@@ -47,7 +52,7 @@ running → needs_human → running → succeeded
 
 1. **Pause / resume in the protocol** — tool round can pause; unresolved pause must not burn another LLM round (same as our critic → escalate, not infinite retry).
 2. **Capability guard** — critic is a guard: redirect once, then reject (maps to `retries < 2` then HITL).
-3. **Product lesson** — they win on **readiness diagnostics** (`deeptutor doctor`). We add **`workflow-run eng-status --check`** (env + API smoke) before claiming “production-minded.”
+3. **Product lesson** — they win on **readiness diagnostics** (`deeptutor doctor`). We add **`incidentops check`** (env + API smoke) before claiming “production-minded.”
 
 ---
 
@@ -99,7 +104,7 @@ Insert after Phase 2:
 | Task | Rationale |
 |------|-----------|
 | `RunStatus` enum matching ruflo lifecycle | Interview whiteboard |
-| `workflow-run --check` | DeepTutor doctor equivalent |
+| `incidentops check` | DeepTutor doctor equivalent |
 | Max 2 critic→researcher retries then `needs_human` | chat-engine pause semantics |
 | Persist `runs/{run_id}.json` checkpoint | ruflo `workflow_resume` story |
 

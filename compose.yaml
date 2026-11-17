@@ -4,6 +4,8 @@ services:
     environment:
       INCIDENTOPS_API_KEY: ${INCIDENTOPS_API_KEY:-local-development-key}
       N8N_ACTION_WEBHOOK_URL: http://n8n:5678/webhook/incidentops/actions
+      N8N_ACTION_TOKEN: ${N8N_ACTION_TOKEN:-local-action-token}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DATABASE_PATH: /app/.data/incidentops.db
       RUNBOOK_DIR: /app/runbooks
       RUNBOOK_DB: /app/.data/runbooks.db
@@ -22,12 +24,16 @@ services:
     restart: unless-stopped
 
   n8n:
-    image: ${N8N_IMAGE:-n8nio/n8n:latest}
+    image: ${N8N_IMAGE:-n8nio/n8n:2.49.0}
     depends_on:
       api:
         condition: service_healthy
     environment:
       INCIDENTOPS_URL: http://api:8000
+      INCIDENTOPS_PUBLIC_URL: ${INCIDENTOPS_PUBLIC_URL:-http://localhost:8000}
+      N8N_ACTION_TOKEN: ${N8N_ACTION_TOKEN:-local-action-token}
+      # n8n 2.x blocks $env in nodes by default; this workflow reads its settings from env.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       INCIDENTOPS_API_KEY: ${INCIDENTOPS_API_KEY:-local-development-key}
       N8N_PUBLIC_URL: ${N8N_PUBLIC_URL:-http://localhost:5678}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-this-before-sharing}

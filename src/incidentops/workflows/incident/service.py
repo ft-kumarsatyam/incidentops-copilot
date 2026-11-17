@@ -169,6 +169,7 @@ class IncidentService:
                         dict(state),
                         attempts=self.settings.n8n_dispatch_attempts,
                         backoff=self.settings.n8n_dispatch_backoff,
+                        token=self.settings.n8n_action_token,
                     )
             except (httpx.HTTPError, ValueError) as error:
                 log.error("incident.dispatch_failed", error=str(error))

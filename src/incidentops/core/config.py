@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     incidentops_api_key: str | None = None
     github_token: str | None = None
     n8n_action_webhook_url: str | None = None
+    n8n_action_token: str | None = None  # shared secret n8n checks on the actions webhook
     n8n_dispatch_attempts: int = 3
     n8n_dispatch_backoff: float = 0.5
 

@@ -19,16 +19,21 @@ def request_actions(
     timeout: float = 10.0,
     attempts: int = 3,
     backoff: float = 0.5,
+    token: str | None = None,
 ) -> dict[str, Any]:
     """POST the approved incident to n8n, retrying transient failures with backoff."""
     if payload.get("approval") != "approved":
         raise ValueError("n8n actions require explicit approval")
 
+    headers = {"Idempotency-Key": str(payload["idempotency_key"])}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     def post() -> httpx.Response:
         response = httpx.post(
             webhook_url,
             json=payload,
-            headers={"Idempotency-Key": str(payload["idempotency_key"])},
+            headers=headers,
             timeout=timeout,
         )
         response.raise_for_status()

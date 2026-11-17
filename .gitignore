@@ -48,3 +48,6 @@ web/node_modules/
 web/dist/
 src/incidentops/static/
 *.tsbuildinfo
+
+# Local-only notes: kept on this machine, never committed
+docs/private/

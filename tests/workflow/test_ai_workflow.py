@@ -145,11 +145,15 @@ def test_each_research_retry_widens_the_runbook_search(
 ) -> None:
     limits: list[int] = []
 
-    def spy(database: Any, query: str, limit: int, prefer: str = "") -> list[dict[str, Any]]:
-        limits.append(limit)
-        return []
+    class SpyRetriever:
+        def search(self, query: str, limit: int, prefer: str | None = None) -> list[dict[str, Any]]:
+            limits.append(limit)
+            return []
 
-    monkeypatch.setattr("incidentops.workflows.incident.nodes.search_runbooks", spy)
+    monkeypatch.setattr(
+        "incidentops.workflows.incident.nodes.build_runbook_retriever",
+        lambda _settings: SpyRetriever(),
+    )
     _run(settings, ScriptedProvider(), "incident_ambiguous.json")
 
     assert limits == [settings.max_runbook_results, settings.max_runbook_results * 2]

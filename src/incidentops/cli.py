@@ -7,7 +7,7 @@ from typing import Any
 
 from incidentops.core.config import Settings
 from incidentops.core.logging import configure_logging
-from incidentops.tools.runbooks import index_runbooks, search_runbooks
+from incidentops.tools.retrieval import build_runbook_retriever, index_runbooks_for_settings
 from incidentops.workflows.incident import IncidentService
 
 
@@ -81,17 +81,12 @@ def main() -> None:
         result = check(settings)
     elif args.command == "runbooks":
         if args.runbook_command == "index":
-            result = {
-                "indexed_chunks": index_runbooks(settings.runbook_dir, settings.runbook_db),
-                "database": str(settings.runbook_db),
-            }
+            stats = index_runbooks_for_settings(settings)
+            result = {**stats, "database": str(settings.runbook_db)}
         else:
+            retriever = build_runbook_retriever(settings)
             result = {
-                "results": search_runbooks(
-                    settings.runbook_db,
-                    args.text,
-                    settings.max_runbook_results,
-                )
+                "results": retriever.search(args.text, settings.max_runbook_results),
             }
     else:
         result = run_fixture(settings, args.fixture, args.approval)

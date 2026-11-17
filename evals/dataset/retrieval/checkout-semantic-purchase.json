@@ -1,0 +1,8 @@
+{
+  "name": "checkout-semantic-purchase",
+  "query": "users cannot complete purchases",
+  "prefer": "checkout-api",
+  "expect_paths": ["checkout-api.md"],
+  "k": 3,
+  "requires_rewrite_or_hybrid": true
+}

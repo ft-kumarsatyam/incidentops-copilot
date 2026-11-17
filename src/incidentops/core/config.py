@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     database_path: Path = Path(".data/incidentops.db")
     runbook_dir: Path = Path("runbooks")
     runbook_db: Path = Path(".data/runbooks.db")
+    runbook_retrieval: Literal["fts", "hybrid"] = "fts"
     max_runbook_results: int = 3
     auto_index_runbooks: bool = False
 

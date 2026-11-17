@@ -139,6 +139,15 @@ def main() -> int:
 
     cases = load_cases(args.suite)
     providers = ["rules", "claude"] if args.provider == "both" else [args.provider]
+    if args.provider == "both":
+        settings_probe = Settings(_env_file=None)  # type: ignore[call-arg]
+        if not settings_probe.anthropic_api_key:
+            print(
+                "ANTHROPIC_API_KEY not set; comparing rules only. "
+                "Set the key and re-run for Claude.",
+                file=sys.stderr,
+            )
+            providers = ["rules"]
     reports = [run_provider(p, cases) for p in providers]
     text = render(reports)
     args.out.write_text(text, encoding="utf-8")

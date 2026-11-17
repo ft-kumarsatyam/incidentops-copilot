@@ -1,0 +1,8 @@
+{
+  "name": "auth-semantic-login",
+  "query": "login broken OAuth",
+  "prefer": "auth-api",
+  "expect_paths": ["auth-api.md"],
+  "k": 3,
+  "requires_rewrite_or_hybrid": true
+}

@@ -107,6 +107,18 @@ architectures passed 10/10 cases with 100% safety and grounding, while the
 specialist topology added roles and latency. We therefore reject a swarm and
 CrewAI for the current scope. See [ADR 006](adr/006-reject-specialist-swarm-for-current-scope.md).
 
+### Runbook RAG
+
+Research uses FTS5 over heading chunks, with deterministic query expansion for
+service aliases (`tools/query_rewrite.py`). Optional hybrid dense rerank lives
+behind `RUNBOOK_RETRIEVAL=hybrid`. Quality is measured separately:
+
+```bash
+make eval-retrieval
+```
+
+See [ADR 007](adr/007-hybrid-runbook-retrieval.md).
+
 ## Observability
 
 - `ai.call` log line per model call: role, model, input and output tokens, latency.

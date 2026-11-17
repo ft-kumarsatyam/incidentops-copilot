@@ -96,6 +96,21 @@ The runbook index is derived from `runbooks/` and can be rebuilt with
 - Claude calls are bounded by `AI_TIMEOUT_SECONDS` and `AI_MAX_OUTPUT_TOKENS`, and
   the critic loop by `MAX_RESEARCH_ATTEMPTS`. Per-run cost therefore has a ceiling.
 
+## Runbook index at scale
+
+The default index is SQLite FTS5 plus optional embeddings in the same file
+(`RUNBOOK_RETRIEVAL=hybrid`, `pip install '.[rag]'`). That fits tens of runbooks
+on one host.
+
+When the corpus grows to hundreds of documents or multiple API instances need a
+shared index:
+
+1. Keep the `RunbookRetriever` interface; swap the store to **Pgvector** or **Qdrant**.
+2. Build embeddings in CI or a batch job; serve search from the shared store.
+3. Leave query rewrite and grounding rules unchanged so triage citations stay valid.
+
+See [ADR 007](adr/007-hybrid-runbook-retrieval.md).
+
 ## Scaling out
 
 To run several API instances:

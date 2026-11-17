@@ -1,0 +1,7 @@
+{
+  "name": "auth-service-prefer",
+  "query": "sign-in failures api",
+  "prefer": "auth-api",
+  "expect_paths": ["auth-api.md"],
+  "k": 1
+}

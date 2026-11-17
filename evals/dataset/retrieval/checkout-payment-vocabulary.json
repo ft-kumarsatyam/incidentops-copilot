@@ -1,0 +1,7 @@
+{
+  "name": "checkout-payment-vocabulary",
+  "query": "payment gateway cart completion HTTP 500",
+  "prefer": "checkout-api",
+  "expect_paths": ["checkout-api.md"],
+  "k": 3
+}

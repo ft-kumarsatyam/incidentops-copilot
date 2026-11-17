@@ -15,7 +15,7 @@ from incidentops.api.middleware import install_middleware
 from incidentops.api.routes import health, incidents
 from incidentops.core.config import Settings
 from incidentops.core.logging import configure_logging, get_logger
-from incidentops.tools.runbooks import index_runbooks
+from incidentops.tools.retrieval import index_runbooks_for_settings
 from incidentops.workflows.incident.service import IncidentService
 
 PACKAGED_UI = Path(__file__).resolve().parents[1] / "static"
@@ -37,7 +37,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "(refusing to start with an unauthenticated API)."
         )
     if settings.auto_index_runbooks:
-        index_runbooks(settings.runbook_dir, settings.runbook_db)
+        index_runbooks_for_settings(settings)
     service = IncidentService(settings)
 
     @asynccontextmanager

@@ -147,11 +147,13 @@ running more than one instance.
 ## Runbook retrieval
 
 `incidentops runbooks index` chunks Markdown by heading into an SQLite FTS5
-table. Research searches with the service, summary and symptoms, and prefers
-the runbook that matches the service. Hits keep their path, section title,
-excerpt and rank, and proposed actions cite them. FTS5 is enough for a small,
-curated corpus and keeps retrieval offline and reproducible. Add embeddings
-only if measured queries fail on vocabulary mismatch.
+table. Research expands the query with deterministic service aliases, searches
+with the service, summary and symptoms, and prefers the runbook that matches the
+service. Hits keep their path, section title, excerpt and rank, and proposed
+actions cite them. FTS5 is the default backend; optional hybrid mode stores local
+embeddings in the same SQLite file and reranks FTS candidates
+(`RUNBOOK_RETRIEVAL=hybrid`, `[rag]` extra). See [ADR 007](adr/007-hybrid-runbook-retrieval.md)
+and `make eval-retrieval`.
 
 ## Failure behavior
 

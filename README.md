@@ -208,10 +208,24 @@ tests/            Unit, workflow, API, agent and contract tests
 docs/             Architecture, AI design, API, deployment, ADRs
 ```
 
+## For reviewers (portfolio)
+
+Short path for interviews and hiring managers:
+[docs/PORTFOLIO.md](docs/PORTFOLIO.md). Reproduce quality numbers with
+`make check` (includes `make eval-retrieval`).
+
+| Report | Command |
+|---|---|
+| [evals/report.md](evals/report.md) | `make eval` |
+| [evals/report-claude.md](evals/report-claude.md) | `make eval-claude` (core 10; needs API key for Claude) |
+| [evals/retrieval_report.md](evals/retrieval_report.md) | `make eval-retrieval` |
+| [evals/architecture_report.md](evals/architecture_report.md) | `make eval-architecture` |
+
 ## Documentation
 
 | Read this | To learn |
 |---|---|
+| [Portfolio guide](docs/PORTFOLIO.md) | Demo script, talking points, evidence tables |
 | [Project brief](docs/PROJECT_BRIEF.md) | The two-page summary for engineering leaders: decisions, evidence, limits |
 | [Architecture](docs/ARCHITECTURE.md) | Components, state, lifecycle, failure behavior |
 | [AI design](docs/AI_DESIGN.md) | Agent roles, guardrails, evals, fallback |
@@ -240,7 +254,8 @@ controls. Known limits and the path forward:
 - SQLite and the in-process event bus mean one API instance. For several
   instances, move to Postgres and a shared pub/sub ([DEPLOYMENT](docs/DEPLOYMENT.md)).
 - Slack signature verification is not enforced in the template workflow yet.
-- Claude results are not yet published; the eval harness is ready for them.
+- Claude comparison on the core 10 cases: run `make eval-claude` when you have a key
+  ([evals/report-claude.md](evals/report-claude.md)).
 - Planned: Jira action node, per-user login, richer monitoring connectors.
 
 ## License

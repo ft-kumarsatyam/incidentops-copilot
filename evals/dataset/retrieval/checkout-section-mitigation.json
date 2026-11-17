@@ -1,0 +1,7 @@
+{
+  "name": "checkout-section-mitigation",
+  "query": "duplicate charge manual retry",
+  "prefer": null,
+  "expect_paths": ["checkout-api.md"],
+  "k": 3
+}

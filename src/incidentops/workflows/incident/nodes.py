@@ -21,7 +21,8 @@ from incidentops.core.config import Settings
 from incidentops.core.logging import get_logger
 from incidentops.tools.github import fetch_recent_commit, is_valid_repo, normalize_github
 from incidentops.tools.monitoring import normalize_monitoring
-from incidentops.tools.runbooks import search_runbooks
+from incidentops.tools.query_rewrite import expand_runbook_query, rewrite_metadata
+from incidentops.tools.retrieval import RunbookRetriever, build_runbook_retriever
 from incidentops.workflows.incident.state import IncidentState
 
 log = get_logger(__name__)
@@ -87,7 +88,7 @@ def intake(state: IncidentState) -> dict[str, Any]:
     }
 
 
-def make_research(settings: Settings) -> Node:
+def make_research(settings: Settings, retriever: RunbookRetriever | None = None) -> Node:
     """Researcher: gathers monitoring, GitHub and runbook evidence.
 
     Each retry widens the runbook search and re-attempts a GitHub fetch that failed earlier,
@@ -115,11 +116,23 @@ def make_research(settings: Settings) -> Node:
                 log.warning("research.github_failed", error=type(error).__name__)
                 timeline.append(f"github unavailable ({type(error).__name__})")
 
-        query = " ".join([service, state.get("summary", ""), *state.get("symptoms", [])]).strip()
-        runbook_hits = search_runbooks(
-            settings.runbook_db, query, settings.max_runbook_results * attempt, prefer=service
+        raw_query = " ".join(
+            [service, state.get("summary", ""), *state.get("symptoms", [])]
+        ).strip()
+        search_query = expand_runbook_query(
+            raw_query,
+            service=service,
+            symptoms=[str(s) for s in state.get("symptoms", [])],
+        )
+        rb = retriever or build_runbook_retriever(settings)
+        runbook_hits = rb.search(
+            search_query,
+            settings.max_runbook_results * attempt,
+            prefer=service or None,
         )
         timeline.append(f"retrieved {len(runbook_hits)} runbook chunks")
+        if search_query != raw_query:
+            timeline.append("expanded runbook query with service aliases")
         if monitoring.get("unverified_reason"):
             timeline.append(
                 f"monitoring unusable ({monitoring['unverified_reason']}); impact is unverified"
@@ -141,6 +154,7 @@ def make_research(settings: Settings) -> Node:
             "runbook_hits": runbook_hits,
             "retries": attempt,
             "timeline": timeline,
+            **rewrite_metadata(raw_query, search_query, service),
         }
         if service:
             update["service"] = service

@@ -1,0 +1,7 @@
+{
+  "name": "checkout-deploy-symptom",
+  "query": "five hundred errors after release",
+  "prefer": "checkout-api",
+  "expect_paths": ["checkout-api.md"],
+  "k": 3
+}

@@ -1,0 +1,7 @@
+{
+  "name": "auth-identity-vocabulary",
+  "query": "identity provider token signing errors",
+  "prefer": "auth-api",
+  "expect_paths": ["auth-api.md"],
+  "k": 3
+}

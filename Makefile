@@ -2,7 +2,7 @@
 PY ?= .venv/bin/python
 BIN := .venv/bin
 
-.PHONY: help setup index dev serve demo test cov eval eval-guardrails eval-claude eval-architecture lint format typecheck check web-install web-dev web-build web-test up down clean
+.PHONY: help setup index dev serve demo test cov eval eval-guardrails eval-claude eval-architecture eval-retrieval lint format typecheck check web-install web-dev web-build web-test up down clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-11s\033[0m %s\n", $$1, $$2}'
@@ -57,6 +57,9 @@ eval-claude: ## Compare rules vs Claude on the labeled incidents (needs ANTHROPI
 eval-architecture: ## Test whether parallel specialist agents beat the current graph
 	$(PY) -m evals.compare_architectures
 
+eval-retrieval: ## Score runbook retrieval (FTS vs query rewrite; hybrid when [rag] is installed)
+	$(PY) -m evals.run_retrieval_evals --modes fts,rewrite,hybrid
+
 lint: ## Lint and check formatting
 	$(BIN)/ruff check .
 	$(BIN)/ruff format --check .
@@ -68,7 +71,7 @@ format: ## Auto-format and fix lint issues
 typecheck: ## Strict type checking
 	$(BIN)/mypy
 
-check: lint typecheck cov eval eval-guardrails web-test ## Everything CI runs
+check: lint typecheck cov eval eval-guardrails eval-retrieval web-test ## Everything CI runs
 
 up: ## Start API + n8n with Docker Compose
 	docker compose up --build

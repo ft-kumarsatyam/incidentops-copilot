@@ -1,0 +1,204 @@
+{
+  "name": "IncidentOps Copilot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "incidentops/intake",
+        "responseMode": "responseNode"
+      },
+      "id": "incident-ingress",
+      "name": "Slack Incident Ingress",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body ?? $json; const e = b.event ?? b; return [{json:{run_id:b.run_id,channel_id:e.channel ?? b.channel_id,thread_ts:e.thread_ts ?? e.ts ?? b.thread_ts,reporter:e.user ?? b.reporter,summary:e.text ?? b.summary,service:b.service ?? '',owner:b.owner ?? '',symptoms:b.symptoms ?? [e.text ?? b.summary],monitoring:b.monitoring ?? {},github:b.github ?? {}}}];"
+      },
+      "id": "normalize",
+      "name": "Normalize Incident",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.INCIDENTOPS_URL + '/incidents'}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "options": {}
+      },
+      "id": "call-graph",
+      "name": "Run LangGraph",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $env.SLACK_BOT_TOKEN}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {channel:$json.channel_id,thread_ts:$json.thread_ts,text:'IncidentOps approval required: ' + $json.severity + '\\nRun: ' + $json.run_id + '\\nActions: ' + ($json.proposed_actions || []).join('; ') + '\\nApprove/reject via ' + $env.N8N_PUBLIC_URL + '/webhook/incidentops/decision?run_id=' + $json.run_id + '&idempotency_key=' + $json.idempotency_key} }}",
+        "options": {}
+      },
+      "id": "post-approval",
+      "name": "Post Approval to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {ok:true, message:'approval posted'} }}"
+      },
+      "id": "respond-ingress",
+      "name": "Acknowledge Incident",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "incidentops/decision",
+        "responseMode": "responseNode"
+      },
+      "id": "decision-ingress",
+      "name": "Approval Callback",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body ?? $json.query ?? $json; const key = String(b.idempotency_key ?? ''); const decision = String(b.decision ?? 'rejected'); if (!key) throw new Error('idempotency_key required'); const seen = $getWorkflowStaticData('global'); const duplicate = Boolean(seen[key]); if (!duplicate && decision === 'approved') seen[key] = {run_id:b.run_id, at:new Date().toISOString()}; return [{json:{...b,decision,duplicate,execute:decision === 'approved' && !duplicate}}];"
+      },
+      "id": "idempotency",
+      "name": "Approval and Idempotency Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.execute}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "should-execute",
+      "name": "Approved and New?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{'https://api.github.com/repos/' + $env.GITHUB_REPO + '/issues'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $env.GITHUB_TOKEN}}"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{$json.idempotency_key}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {title:'Incident ' + $json.run_id,body:'Approved from Slack. Idempotency key: ' + $json.idempotency_key,labels:['incident']} }}",
+        "options": {}
+      },
+      "id": "create-issue",
+      "name": "Create GitHub Incident",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {ok:true, executed:$json.execute ?? true, duplicate:$json.duplicate ?? false} }}"
+      },
+      "id": "respond-decision",
+      "name": "Return Decision",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [880, 300]
+    }
+  ],
+  "connections": {
+    "Slack Incident Ingress": {
+      "main": [[{"node": "Normalize Incident", "type": "main", "index": 0}]]
+    },
+    "Normalize Incident": {
+      "main": [[{"node": "Run LangGraph", "type": "main", "index": 0}]]
+    },
+    "Run LangGraph": {
+      "main": [[{"node": "Post Approval to Slack", "type": "main", "index": 0}]]
+    },
+    "Post Approval to Slack": {
+      "main": [[{"node": "Acknowledge Incident", "type": "main", "index": 0}]]
+    },
+    "Approval Callback": {
+      "main": [[{"node": "Approval and Idempotency Gate", "type": "main", "index": 0}]]
+    },
+    "Approval and Idempotency Gate": {
+      "main": [[{"node": "Approved and New?", "type": "main", "index": 0}]]
+    },
+    "Approved and New?": {
+      "main": [
+        [{"node": "Create GitHub Incident", "type": "main", "index": 0}],
+        [{"node": "Return Decision", "type": "main", "index": 0}]
+      ]
+    },
+    "Create GitHub Incident": {
+      "main": [[{"node": "Return Decision", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "incidentops-copilot-v1"
+}

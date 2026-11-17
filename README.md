@@ -20,6 +20,7 @@ idempotency, durable checkpoints, and human escalation.
 
 - Accepts incident reports from a Slack thread through n8n.
 - Normalizes supplied GitHub and monitoring evidence.
+- Retrieves relevant Markdown runbook sections with local SQLite FTS5 search.
 - Assigns a deterministic severity and proposes reversible next actions.
 - Re-runs research when required evidence is missing.
 - Escalates ambiguous incidents to `needs_human` after two attempts.
@@ -32,7 +33,8 @@ idempotency, durable checkpoints, and human escalation.
 
 - Python 3.11 or newer
 - `pip`
-- n8n and Slack only for production integration testing
+- Docker Compose for the local API + n8n stack
+- Slack only for live integration testing
 
 ### Install
 
@@ -52,6 +54,8 @@ No API key is required for the deterministic local demo.
 
 ```bash
 workflow-run check
+workflow-run runbooks index
+workflow-run runbooks query "checkout 5xx rollback"
 workflow-run incident --fixture tests/fixtures/incident_complete.json
 workflow-run incident --fixture tests/fixtures/incident_ambiguous.json
 ```
@@ -66,6 +70,30 @@ workflow-run incident \
   --fixture tests/fixtures/incident_complete.json \
   --approval approved
 ```
+
+### Open the response dashboard
+
+Start the API and open [http://localhost:8000](http://localhost:8000):
+
+```bash
+uvicorn workflow_automation.api:app --reload
+```
+
+The dashboard reads the same checkpoints as Slack/n8n. It shows severity,
+evidence, cited runbook sections, response timeline, and approval controls.
+When `INCIDENTOPS_API_KEY` is configured, enter it in the dashboard header; it
+is retained only in browser session storage.
+
+### Run the API and n8n
+
+```bash
+docker compose up --build
+curl http://localhost:8000/health
+```
+
+The API runs at `http://localhost:8000`; n8n runs at
+`http://localhost:5678`. Import `/workflows/incident-ops.json` from the mounted
+workflow directory.
 
 ## Architecture
 
@@ -88,7 +116,17 @@ Copy `.env.example` to `.env` and set only the integrations you need:
 | --- | --- | --- |
 | `GITHUB_TOKEN` | Read-only incident investigation | No |
 | `N8N_ACTION_WEBHOOK_URL` | Approved action callback | No |
+| `INCIDENTOPS_API_KEY` | Shared key between n8n and the Python API | Production |
+| `INCIDENTOPS_URL` | API base URL used by n8n | n8n |
+| `N8N_PUBLIC_URL` | Public approval-link base URL | Slack |
+| `N8N_ENCRYPTION_KEY` | Protect n8n credentials at rest | Production |
+| `SLACK_BOT_TOKEN` | Post approval messages | Live Slack |
+| `GITHUB_REPO` | Repository receiving approved incident issues | Live action |
 | `CHECKPOINT_DIR` | Local checkpoint location | No |
+| `RUNBOOK_DIR` | Markdown source directory for grounded retrieval | No |
+| `RUNBOOK_DB` | Generated SQLite FTS5 index | No |
+| `MAX_RUNBOOK_RESULTS` | Maximum cited chunks per incident | No |
+| `AUTO_INDEX_RUNBOOKS` | Rebuild index at API startup | Containers |
 | `MAX_RESEARCH_ATTEMPTS` | Bounded research retries | No |
 | `CONFIDENCE_THRESHOLD` | Minimum automatic confidence | No |
 | `LANGSMITH_API_KEY` | Optional LangSmith tracing | No |
@@ -100,8 +138,8 @@ Never commit `.env`; it is excluded by `.gitignore`.
 
 1. Import [`n8n/incident-ops.json`](n8n/incident-ops.json) into n8n.
 2. Configure the environment values documented in [`n8n/README.md`](n8n/README.md).
-3. Expose the Python workflow behind an authenticated service endpoint.
-4. Point `INCIDENTOPS_URL` at that endpoint.
+3. Start `docker compose up --build`.
+4. Point Slack events at n8n's `incidentops/intake` webhook.
 5. Test intake, approval, rejection, and duplicate delivery.
 
 The checked-in n8n workflow is a portable template. Credential IDs and the

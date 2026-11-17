@@ -9,6 +9,7 @@ from typing import Any, cast
 from langgraph.types import interrupt
 
 from workflow_automation.tools.monitoring import normalize_monitoring
+from workflow_automation.tools.runbooks import search_runbooks
 from workflow_automation.workflows.incident.state import IncidentState
 
 REQUIRED_FIELDS = ("summary", "service", "reporter", "owner", "symptoms")
@@ -33,6 +34,7 @@ def intake(state: IncidentState) -> dict[str, Any]:
         "max_retries": state.get("max_retries", 2),
         "missing_fields": _missing(state),
         "evidence": [],
+        "runbook_hits": [],
         "conflicts": [],
         "proposed_actions": [],
         "approval_required": True,
@@ -40,24 +42,41 @@ def intake(state: IncidentState) -> dict[str, Any]:
     }
 
 
-def research(state: IncidentState) -> dict[str, Any]:
-    monitoring = normalize_monitoring(state.get("monitoring", {}))
-    service = state.get("service") or str(monitoring.get("service", ""))
-    evidence: list[dict[str, Any]] = []
-    if monitoring:
-        evidence.append({"source": "monitoring", "data": monitoring})
-    if state.get("github"):
-        evidence.append({"source": "github", "data": state["github"]})
-    timeline = [*state.get("timeline", []), f"research attempt {state.get('retries', 0) + 1}"]
-    update: dict[str, Any] = {
-        "monitoring": monitoring,
-        "evidence": evidence,
-        "retries": state.get("retries", 0) + 1,
-        "timeline": timeline,
-    }
-    if service:
-        update["service"] = service
-    return update
+def make_research(
+    runbook_db: Path,
+    max_runbook_results: int,
+) -> Callable[[IncidentState], dict[str, Any]]:
+    def research(state: IncidentState) -> dict[str, Any]:
+        monitoring = normalize_monitoring(state.get("monitoring", {}))
+        service = state.get("service") or str(monitoring.get("service", ""))
+        query = " ".join(
+            [service, state.get("summary", ""), *state.get("symptoms", [])]
+        ).strip()
+        runbook_hits = search_runbooks(runbook_db, query, max_runbook_results)
+        evidence: list[dict[str, Any]] = []
+        if monitoring:
+            evidence.append({"source": "monitoring", "data": monitoring})
+        if state.get("github"):
+            evidence.append({"source": "github", "data": state["github"]})
+        if runbook_hits:
+            evidence.append({"source": "runbooks", "data": runbook_hits})
+        timeline = [
+            *state.get("timeline", []),
+            f"research attempt {state.get('retries', 0) + 1}",
+            f"retrieved {len(runbook_hits)} runbook chunks",
+        ]
+        update: dict[str, Any] = {
+            "monitoring": monitoring,
+            "evidence": evidence,
+            "runbook_hits": runbook_hits,
+            "retries": state.get("retries", 0) + 1,
+            "timeline": timeline,
+        }
+        if service:
+            update["service"] = service
+        return update
+
+    return research
 
 
 def assess(state: IncidentState) -> dict[str, Any]:
@@ -83,6 +102,9 @@ def assess(state: IncidentState) -> dict[str, Any]:
     ]
     if state.get("github", {}).get("recent_deploy"):
         actions.append("Ask the service owner to assess the recent deploy for rollback")
+    if state.get("runbook_hits"):
+        hit = state["runbook_hits"][0]
+        actions.append(f"Follow runbook: {hit['title']} ({hit['path']})")
     return {
         "severity": severity,
         "confidence": confidence,
@@ -121,6 +143,32 @@ def _persist(state: IncidentState, checkpoint_dir: Path) -> None:
     temporary = target.with_suffix(".tmp")
     temporary.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
     temporary.replace(target)
+
+
+def load_checkpoint(run_id: str, checkpoint_dir: Path) -> IncidentState:
+    safe_name = hashlib.sha256(run_id.encode()).hexdigest()
+    path = checkpoint_dir / f"{safe_name}.json"
+    if not path.is_file():
+        raise FileNotFoundError(run_id)
+    state: Any = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(state, dict) or state.get("run_id") != run_id:
+        raise ValueError("checkpoint run_id mismatch")
+    return cast(IncidentState, state)
+
+
+def list_checkpoints(checkpoint_dir: Path) -> list[IncidentState]:
+    if not checkpoint_dir.is_dir():
+        return []
+    incidents: list[tuple[float, IncidentState]] = []
+    for path in checkpoint_dir.glob("*.json"):
+        try:
+            state: Any = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(state, dict) and isinstance(state.get("run_id"), str):
+            incidents.append((path.stat().st_mtime, cast(IncidentState, state)))
+    incidents.sort(key=lambda item: item[0], reverse=True)
+    return [state for _, state in incidents]
 
 
 def make_finalize(checkpoint_dir: Path) -> Callable[[IncidentState], dict[str, Any]]:

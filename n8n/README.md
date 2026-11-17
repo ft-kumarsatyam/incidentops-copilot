@@ -13,8 +13,11 @@ Required environment values:
 The workflow has two webhook paths:
 
 - `POST /webhook/incidentops/intake`
-- `POST /webhook/incidentops/decision`
+- `GET /webhook/incidentops/decision`
+- `POST /webhook/incidentops/actions` (called by the approved API decision)
 
-The decision path stores processed idempotency keys in workflow static data.
+The decision and action paths store separate processed idempotency keys in
+workflow static data. Set the API's `N8N_ACTION_WEBHOOK_URL` to the actions
+path so dashboard approvals use the same execution flow as Slack.
 For production, replace static data with Redis or a database unique constraint.
 See `docs/API_CONTRACT.md`.

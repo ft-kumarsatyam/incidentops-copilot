@@ -8,6 +8,8 @@ flowchart LR
   N8nIn --> Graph["LangGraph API or CLI"]
   Graph --> GitHub["GitHub read API"]
   Graph --> Monitor["Monitoring payload"]
+  Graph --> Runbooks["SQLite FTS5 runbooks"]
+  Dashboard["Incident commander dashboard"] --> Graph
   Graph --> Approval["Approval response"]
   Approval --> N8nOut["n8n action webhook"]
   N8nOut --> Jira["Jira or GitHub issue"]
@@ -52,7 +54,7 @@ stateDiagram-v2
 | Node | Contract |
 |---|---|
 | `intake` | Normalize the Slack/n8n payload and identify missing required facts |
-| `research` | Merge monitoring and GitHub evidence; never invent evidence |
+| `research` | Merge monitoring/GitHub evidence and retrieve cited runbook chunks |
 | `assess` | Assign deterministic demo severity and propose reversible actions |
 | `critic` | Cross-check facts/evidence; retry at most twice |
 | `finalize` | Produce approval or escalation payload and persist checkpoint |
@@ -86,6 +88,19 @@ Response contains `run_id`, `idempotency_key`, `status`, `severity`,
 n8n posts approve/reject buttons into the originating thread. The callback must
 contain the same `run_id` and idempotency key. n8n stores processed keys before
 creating a ticket; duplicate Slack delivery returns the existing result.
+
+The FastAPI dashboard is a second view over the same checkpoint and decision
+endpoints used by n8n. It has no separate state store, so Slack and browser
+decisions cannot drift.
+
+## Runbook retrieval
+
+`workflow-run runbooks index` chunks Markdown by heading and builds a local
+SQLite FTS5 index. Research searches with service, summary, and symptoms.
+Results retain `path`, section title, excerpt, and rank; proposed actions cite
+that source. SQLite is enough for the small runbook corpus and keeps retrieval
+offline and reproducible. Add embeddings only if measured queries fail because
+the incident and runbook use different vocabulary.
 
 ## Failure behavior
 

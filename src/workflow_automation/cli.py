@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from workflow_automation.config import Settings
+from workflow_automation.tools.runbooks import index_runbooks, search_runbooks
 from workflow_automation.workflows.incident import run_incident
 
 
@@ -29,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
     incident = commands.add_parser("incident", help="Run an IncidentOps fixture")
     incident.add_argument("--fixture", required=True, type=Path)
     incident.add_argument("--approval", choices=("approved", "rejected"))
+    runbooks = commands.add_parser("runbooks", help="Manage the local runbook index")
+    runbook_commands = runbooks.add_subparsers(dest="runbook_command", required=True)
+    runbook_commands.add_parser("index", help="Rebuild the SQLite FTS index")
+    query = runbook_commands.add_parser("query", help="Search indexed runbooks")
+    query.add_argument("text")
     return parser
 
 
@@ -37,6 +43,20 @@ def main() -> None:
     settings = Settings()
     if args.command == "check":
         result = check(settings)
+    elif args.command == "runbooks":
+        if args.runbook_command == "index":
+            result = {
+                "indexed_chunks": index_runbooks(settings.runbook_dir, settings.runbook_db),
+                "database": str(settings.runbook_db),
+            }
+        else:
+            result = {
+                "results": search_runbooks(
+                    settings.runbook_db,
+                    args.text,
+                    settings.max_runbook_results,
+                )
+            }
     else:
         payload = json.loads(args.fixture.read_text(encoding="utf-8"))
         result = run_incident(payload, approval=args.approval, settings=settings)

@@ -33,6 +33,7 @@ secrets/
 # Runtime / agent state
 .runs/
 .checkpoints/
+.data/
 graphify-out/
 logs/
 *.log

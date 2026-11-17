@@ -1,0 +1,32 @@
+{
+  "name": "metrics-boolean",
+  "category": "malformed-input",
+  "description": "A boolean error_rate is rejected.",
+  "input": {
+    "run_id": "eval-metrics-boolean",
+    "channel_id": "C-INCIDENTS",
+    "thread_ts": "1700000100.0001",
+    "reporter": "U-ONCALL",
+    "summary": "Checkout API is returning elevated 5xx responses",
+    "service": "checkout-api",
+    "owner": "payments-oncall",
+    "symptoms": [
+      "12% error rate",
+      "customer checkout failures"
+    ],
+    "monitoring": {
+      "service": "checkout-api",
+      "error_rate": true,
+      "latency_ms": 2400,
+      "alert": "5xx threshold exceeded"
+    },
+    "github": {
+      "repo": "acme/checkout",
+      "recent_deploy": "abc123",
+      "url": "https://github.com/acme/checkout/commit/abc123"
+    }
+  },
+  "expect": {
+    "status": "needs_human"
+  }
+}

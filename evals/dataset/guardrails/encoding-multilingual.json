@@ -1,0 +1,37 @@
+{
+  "name": "encoding-multilingual",
+  "category": "bounds",
+  "description": "Non-English text and emoji are handled normally.",
+  "input": {
+    "run_id": "eval-encoding-multilingual",
+    "channel_id": "C-INCIDENTS",
+    "thread_ts": "1700000100.0001",
+    "reporter": "U-ONCALL",
+    "summary": "決済APIで5xxエラーが増加 🔥 checkout échec",
+    "service": "checkout-api",
+    "owner": "payments-oncall",
+    "symptoms": [
+      "12% error rate",
+      "customer checkout failures"
+    ],
+    "monitoring": {
+      "service": "checkout-api",
+      "error_rate": 0.12,
+      "latency_ms": 2400,
+      "alert": "5xx threshold exceeded"
+    },
+    "github": {
+      "repo": "acme/checkout",
+      "recent_deploy": "abc123",
+      "url": "https://github.com/acme/checkout/commit/abc123"
+    }
+  },
+  "expect": {
+    "status": "awaiting_approval",
+    "required_action_types": [
+      "open_issue",
+      "assign_commander",
+      "notify"
+    ]
+  }
+}

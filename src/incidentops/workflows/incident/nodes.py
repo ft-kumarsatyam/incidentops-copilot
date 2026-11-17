@@ -8,23 +8,28 @@ deterministic rules provider, or with a fake in tests. Anything that gates the w
 import hashlib
 import json
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any
 
 import httpx
 from langgraph.types import interrupt
 
-from incidentops.agents.guardrails import deterministic_conflicts
+from incidentops.agents.guardrails import deterministic_conflicts, injection_signals
 from incidentops.agents.resilient import TriageProvider
 from incidentops.agents.schemas import AIResult, ProposedAction, Triage, TriageContext
 from incidentops.core.config import Settings
 from incidentops.core.logging import get_logger
-from incidentops.tools.github import fetch_recent_commit
+from incidentops.tools.github import fetch_recent_commit, is_valid_repo, normalize_github
 from incidentops.tools.monitoring import normalize_monitoring
 from incidentops.tools.runbooks import search_runbooks
 from incidentops.workflows.incident.state import IncidentState
 
 log = get_logger(__name__)
 REQUIRED_FIELDS = ("summary", "service", "reporter", "owner", "symptoms")
+# Defence in depth: the API already caps these, but the CLI and tests call the service directly.
+MAX_SUMMARY = 2000
+MAX_SYMPTOMS = 20
+MAX_SYMPTOM_CHARS = 500
 
 Node = Callable[[IncidentState], dict[str, Any]]
 
@@ -39,17 +44,20 @@ def _missing(state: IncidentState) -> list[str]:
 
 
 def context_from_state(state: IncidentState) -> TriageContext:
-    return TriageContext(
-        summary=state.get("summary", ""),
-        service=state.get("service", ""),
-        owner=state.get("owner", ""),
-        reporter=state.get("reporter", ""),
-        symptoms=list(state.get("symptoms", [])),
-        monitoring=dict(state.get("monitoring", {})),
-        github=dict(state.get("github", {})),
+    context = TriageContext(
+        summary=str(state.get("summary", ""))[:MAX_SUMMARY],
+        service=str(state.get("service", ""))[:128],
+        owner=str(state.get("owner", ""))[:128],
+        reporter=str(state.get("reporter", ""))[:128],
+        symptoms=[
+            str(s)[:MAX_SYMPTOM_CHARS] for s in list(state.get("symptoms", []))[:MAX_SYMPTOMS]
+        ],
+        monitoring=normalize_monitoring(state.get("monitoring", {})),
+        github=normalize_github(state.get("github", {})),
         runbook_hits=list(state.get("runbook_hits", [])),
         missing_fields=_missing(state),
     )
+    return replace(context, guardrail_flags=injection_signals(context))
 
 
 def _ai_summary(result: AIResult[Any]) -> dict[str, Any]:
@@ -92,12 +100,18 @@ def make_research(settings: Settings) -> Node:
         monitoring = normalize_monitoring(state.get("monitoring", {}))
         service = state.get("service") or str(monitoring.get("service", ""))
 
-        github = dict(state.get("github", {}))
-        if settings.github_token and github.get("repo") and not github.get("recent_deploy"):
+        github = normalize_github(state.get("github", {}))
+        if state.get("github") and not github.get("repo") and "repo" in state["github"]:
+            timeline.append("github repo ignored: not a valid owner/name")
+        if (
+            settings.github_token
+            and is_valid_repo(github.get("repo"))
+            and not github.get("recent_deploy")
+        ):
             try:
                 github = {**github, **fetch_recent_commit(github["repo"], settings.github_token)}
                 timeline.append("fetched latest commit from GitHub")
-            except httpx.HTTPError as error:
+            except (httpx.HTTPError, ValueError) as error:
                 log.warning("research.github_failed", error=type(error).__name__)
                 timeline.append(f"github unavailable ({type(error).__name__})")
 
@@ -106,7 +120,11 @@ def make_research(settings: Settings) -> Node:
             settings.runbook_db, query, settings.max_runbook_results * attempt, prefer=service
         )
         timeline.append(f"retrieved {len(runbook_hits)} runbook chunks")
-        if monitoring.get("timed_out"):
+        if monitoring.get("unverified_reason"):
+            timeline.append(
+                f"monitoring unusable ({monitoring['unverified_reason']}); impact is unverified"
+            )
+        elif monitoring.get("timed_out"):
             timeline.append("monitoring timed out; impact is unverified")
 
         evidence: list[dict[str, Any]] = []
@@ -150,7 +168,15 @@ def make_assess(provider: TriageProvider) -> Node:
             "proposed_actions": [action.description for action in triage.actions],
             "action_items": [action.model_dump() for action in triage.actions],
             "ai": _ai_summary(result),
-            "timeline": [f"assessed as {triage.severity} by {result.provider}"],
+            "guardrail_flags": context.guardrail_flags,
+            "timeline": [
+                f"assessed as {triage.severity} by {result.provider}",
+                *(
+                    [f"possible prompt injection in: {', '.join(context.guardrail_flags)}"]
+                    if context.guardrail_flags
+                    else []
+                ),
+            ],
         }
 
     return assess

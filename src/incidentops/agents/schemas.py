@@ -55,6 +55,7 @@ class TriageContext:
     github: dict[str, Any]
     runbook_hits: list[dict[str, Any]]
     missing_fields: list[str]
+    guardrail_flags: list[str] = field(default_factory=list)
 
     @property
     def evidence_refs(self) -> set[str]:
@@ -85,6 +86,7 @@ class TriageContext:
                 for h in self.runbook_hits
             ],
             "missing_fields": self.missing_fields,
+            "guardrail_flags": self.guardrail_flags,
             "available_evidence": sorted(self.evidence_refs),
         }
 

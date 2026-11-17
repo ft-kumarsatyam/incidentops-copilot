@@ -39,6 +39,7 @@ class IncidentState(TypedDict, total=False):
     ai: dict[str, Any]
     ai_review: dict[str, Any]
     conflicts: list[str]
+    guardrail_flags: list[str]
     retries: int
     max_retries: int
     confidence_threshold: float

@@ -1,0 +1,25 @@
+{
+  "name": "minimal-payload",
+  "category": "bounds",
+  "description": "A near-empty payload asks a human instead of guessing.",
+  "input": {
+    "run_id": "eval-minimal-payload",
+    "channel_id": "C-INCIDENTS",
+    "thread_ts": "1700000100.0001",
+    "reporter": "U-ONCALL",
+    "summary": "something is wrong",
+    "service": "",
+    "owner": "",
+    "symptoms": [],
+    "monitoring": {},
+    "github": {}
+  },
+  "expect": {
+    "status": "needs_human",
+    "missing_fields_include": [
+      "service",
+      "owner",
+      "symptoms"
+    ]
+  }
+}

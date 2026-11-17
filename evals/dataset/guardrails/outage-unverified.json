@@ -1,0 +1,34 @@
+{
+  "name": "outage-unverified",
+  "category": "bounds",
+  "description": "A reported outage with no usable metrics is SEV-1 but never auto-trusted.",
+  "input": {
+    "run_id": "eval-outage-unverified",
+    "channel_id": "C-INCIDENTS",
+    "thread_ts": "1700000100.0001",
+    "reporter": "U-ONCALL",
+    "summary": "Checkout API is returning elevated 5xx responses",
+    "service": "checkout-api",
+    "owner": "payments-oncall",
+    "symptoms": [
+      "complete customer outage"
+    ],
+    "monitoring": {
+      "service": "checkout-api",
+      "error_rate": 0.0,
+      "latency_ms": 2400,
+      "alert": "5xx threshold exceeded",
+      "timed_out": true
+    },
+    "github": {
+      "repo": "acme/checkout",
+      "recent_deploy": "abc123",
+      "url": "https://github.com/acme/checkout/commit/abc123"
+    }
+  },
+  "expect": {
+    "status": "needs_human",
+    "severity": "SEV-1",
+    "confidence_max": 0.79
+  }
+}

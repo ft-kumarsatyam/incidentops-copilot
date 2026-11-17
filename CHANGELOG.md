@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- Guardrail layers: output content policy (destructive commands, remote code, exfiltration,
+  markup, injection echo, unsanctioned escalation targets), per-type evidence rules, a stricter
+  severity cross-check, an input injection scanner (`guardrail_flags`), critic-output validation,
+  and allowlisted GitHub and monitoring input. See `docs/GUARDRAILS.md`.
+- `make eval-guardrails`: scripted hostile and benign model outputs with gated attack block rate
+  and false-positive rate, plus 27 end-to-end edge-case incidents (`evals/dataset/guardrails/`)
+  and new scorer checks (`bounded`, `no_leak`, `flagged`, `calibration`, `actions`).
+- About 250 new tests, including mutation tests that prove the evals fail when a guardrail is
+  removed.
+- Redaction for card numbers, SSNs, PEM keys, JWTs, Google and Stripe keys, Basic auth and URL
+  credentials.
 - `docs/PROJECT_BRIEF.md` for engineering leaders, and README screenshots.
 - Documentation set: README rewrite, architecture, API contract, deployment, security,
   and ADRs 002 to 005.
@@ -17,6 +28,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - Personal career-positioning docs and the stale benchmark notes (still in git history).
 
 ### Fixed
+- A non-numeric `error_rate` such as `"12%"` crashed triage, and the rules fallback crashed too.
+  It is now parsed, or marks impact unverified.
+- A NaN model confidence was clamped to 1.0 and could pass the approval threshold. It now
+  fails closed to 0.0.
+- Email and URL-credential redaction was quadratic: a 250 KB body took minutes of CPU.
+- A `repo` value from the incident was interpolated into the GitHub API path unvalidated.
+- A `rollback` action could ground itself on the report alone.
 - The web CI job failed on a clean install because `@types/node` was not declared; a copy in
   a parent directory hid it locally.
 - Runbook search now falls back to no results for an index built by an older version. The

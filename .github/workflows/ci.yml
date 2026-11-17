@@ -35,8 +35,10 @@ jobs:
         run: .venv/bin/mypy
       - name: Test with coverage
         run: .venv/bin/pytest -q --cov
-      - name: Evals (offline rules baseline)
+      - name: Evals (offline rules baseline, core + adversarial incidents)
         run: .venv/bin/python -m evals.run_evals --provider rules
+      - name: Guardrail evals (attack block rate and false-positive rate must both be 100%)
+        run: .venv/bin/python -m evals.guardrail_eval
 
   web:
     runs-on: ubuntu-latest

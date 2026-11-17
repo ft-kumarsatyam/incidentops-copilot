@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from incidentops.agents.guardrails import validate_triage
+from incidentops.agents.guardrails import validate_triage, validate_verdict
 from incidentops.agents.rules import RulesProvider
 from incidentops.agents.schemas import (
     AIResult,
@@ -55,8 +55,10 @@ class ResilientProvider:
         reason: str | None = None
         if self.primary is not None:
             try:
-                return self.primary.review(context, triage)
-            except ProviderError as error:
+                result = self.primary.review(context, triage)
+                result.value = validate_verdict(result.value)
+                return result
+            except (ProviderError, GuardrailError) as error:
                 reason = str(error)
                 log.warning("ai.fallback", role="critic", reason=reason)
         fallback = self.fallback.review(context, triage)

@@ -58,6 +58,9 @@ Applied to every model answer, in `agents/guardrails.py`:
 5. **Bounds.** Confidence is clamped, and text, action and hypothesis counts are capped.
 6. **Confidence ceiling.** Missing fields cap confidence in code, however sure the model sounds.
 
+The full layer list, content policy, eval criteria and edge-case matrix are in
+[GUARDRAILS.md](GUARDRAILS.md).
+
 On any `ProviderError` (API failure, refusal, truncation, malformed output) or `GuardrailError`,
 the workflow falls back to the rules provider and records why.
 

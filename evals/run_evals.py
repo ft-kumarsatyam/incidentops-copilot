@@ -3,6 +3,7 @@
 python -m evals.run_evals                      # rules baseline (free, offline, deterministic)
 python -m evals.run_evals --provider claude    # live model (needs ANTHROPIC_API_KEY, costs money)
 python -m evals.run_evals --provider both
+python -m evals.run_evals --suite guardrails   # only the adversarial / edge-case incidents
 """
 
 import argparse
@@ -20,6 +21,7 @@ from incidentops.workflows.incident import IncidentService
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = Path(__file__).parent / "dataset"
+SUITES = ("core", "guardrails", "all")
 
 
 @dataclass
@@ -50,8 +52,15 @@ class ProviderReport:
         return f"{sum(values)}/{len(values)}" if values else "n/a"
 
 
-def load_cases() -> list[dict[str, Any]]:
-    return [json.loads(path.read_text("utf-8")) for path in sorted(DATASET.glob("*.json"))]
+def load_cases(suite: str = "core") -> list[dict[str, Any]]:
+    """``core`` is the original labeled set (also used by the architecture benchmark);
+    ``guardrails`` holds the adversarial and edge-case incidents in ``dataset/guardrails/``."""
+    paths: list[Path] = []
+    if suite in ("core", "all"):
+        paths += sorted(DATASET.glob("*.json"))
+    if suite in ("guardrails", "all"):
+        paths += sorted((DATASET / "guardrails").glob("*.json"))
+    return [json.loads(path.read_text("utf-8")) for path in paths]
 
 
 def run_provider(provider: str, cases: list[dict[str, Any]]) -> ProviderReport:
@@ -123,11 +132,12 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument("--provider", choices=("rules", "claude", "both"), default="rules")
+    parser.add_argument("--suite", choices=SUITES, default="all")
     parser.add_argument("--min-pass", type=float, default=1.0, help="fail below this pass rate")
     parser.add_argument("--out", type=Path, default=Path(__file__).parent / "report.md")
     args = parser.parse_args()
 
-    cases = load_cases()
+    cases = load_cases(args.suite)
     providers = ["rules", "claude"] if args.provider == "both" else [args.provider]
     reports = [run_provider(p, cases) for p in providers]
     text = render(reports)

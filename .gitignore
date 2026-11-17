@@ -51,3 +51,9 @@ src/incidentops/static/
 
 # Local-only notes: kept on this machine, never committed
 docs/private/
+
+# Agent and tooling config: local to this machine, never committed
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+.mcp.json

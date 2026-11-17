@@ -2,7 +2,7 @@
 PY ?= .venv/bin/python
 BIN := .venv/bin
 
-.PHONY: help setup index dev serve demo test cov eval eval-claude eval-architecture lint format typecheck check web-install web-dev web-build web-test up down clean
+.PHONY: help setup index dev serve demo test cov eval eval-guardrails eval-claude eval-architecture lint format typecheck check web-install web-dev web-build web-test up down clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-11s\033[0m %s\n", $$1, $$2}'
@@ -45,8 +45,11 @@ test: ## Run the test suite
 cov: ## Run tests with coverage (fails under 85%)
 	$(BIN)/pytest -q --cov
 
-eval: ## Score the labeled incidents with the offline rules provider (free)
+eval: ## Score core + adversarial/edge-case incidents with the offline rules provider (free)
 	$(PY) -m evals.run_evals --provider rules
+
+eval-guardrails: ## Measure the guardrails: attack block rate and false-positive rate (free, no model)
+	$(PY) -m evals.guardrail_eval
 
 eval-claude: ## Compare rules vs Claude on the labeled incidents (needs ANTHROPIC_API_KEY; costs money)
 	$(PY) -m evals.run_evals --provider both
@@ -65,7 +68,7 @@ format: ## Auto-format and fix lint issues
 typecheck: ## Strict type checking
 	$(BIN)/mypy
 
-check: lint typecheck cov eval web-test ## Everything CI runs
+check: lint typecheck cov eval eval-guardrails web-test ## Everything CI runs
 
 up: ## Start API + n8n with Docker Compose
 	docker compose up --build

@@ -4,13 +4,14 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from incidentops.api.deps import authenticate, get_actor, get_service
 from incidentops.api.events import event_stream
 from incidentops.workflows.incident.service import IncidentService
 
 RUN_ID = r"^[A-Za-z0-9._:-]{1,128}$"
+Symptom = Annotated[str, StringConstraints(max_length=500)]
 
 router = APIRouter(prefix="/incidents", tags=["incidents"], dependencies=[Depends(authenticate)])
 Service = Annotated[IncidentService, Depends(get_service)]
@@ -26,9 +27,9 @@ class IncidentRequest(BaseModel):
     summary: str = Field(min_length=1, max_length=2000)
     service: str = Field(default="", max_length=128)
     owner: str = Field(default="", max_length=128)
-    symptoms: list[str] = Field(default_factory=list, max_length=20)
-    monitoring: dict[str, Any] = Field(default_factory=dict)
-    github: dict[str, Any] = Field(default_factory=dict)
+    symptoms: list[Symptom] = Field(default_factory=list, max_length=20)
+    monitoring: dict[str, Any] = Field(default_factory=dict, max_length=50)
+    github: dict[str, Any] = Field(default_factory=dict, max_length=50)
 
 
 class DecisionRequest(BaseModel):

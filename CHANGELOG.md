@@ -5,13 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- `docs/PROJECT_BRIEF.md` for engineering leaders, and README screenshots.
 - Documentation set: README rewrite, architecture, API contract, deployment, security,
   and ADRs 002 to 005.
 - `Mark Action Done` node in the n8n workflow, and Node-executed tests for the gate and
   the token check.
 - Dependabot tracking for the web UI's npm dependencies.
 
+### Removed
+- The `workflow-run` command alias. Use `incidentops`.
+- Personal career-positioning docs and the stale benchmark notes (still in git history).
+
 ### Fixed
+- The web CI job failed on a clean install because `@types/node` was not declared; a copy in
+  a parent directory hid it locally.
 - Runbook search now falls back to no results for an index built by an older version. The
   previous handler missed `sqlite3.InterfaceError`, so a stale index crashed research.
 

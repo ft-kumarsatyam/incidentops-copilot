@@ -37,8 +37,9 @@ API and the page keeps working by polling.
 
 Pick **Something is wrong**. The report names no service or impact. The critic
 sends the run back to research once, then the incident lands in `needs_human`
-with a plain list of what a responder must supply. Nothing is proposed for
-approval, because the system does not invent an owner or a service.
+with a plain list of what a responder must supply. The draft actions are shown
+for reference only. There is no Approve button, and the API answers `409` if you
+try, because the system will not invent an owner or a service.
 
 ## 5. Approve twice, on purpose
 

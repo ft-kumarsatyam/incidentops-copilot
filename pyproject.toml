@@ -1,7 +1,7 @@
 [project]
 name = "incidentops-copilot"
 version = "0.2.0"
-description = "Slack-native LangGraph incident coordination with n8n and human approval."
+description = "Human-approved AI incident triage: Claude proposes, a person approves, n8n executes."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -28,6 +28,12 @@ dependencies = [
   "uvicorn>=0.34",
 ]
 
+[project.urls]
+Homepage = "https://github.com/ft-kumarsatyam/incidentops-copilot"
+Documentation = "https://github.com/ft-kumarsatyam/incidentops-copilot/tree/main/docs"
+Changelog = "https://github.com/ft-kumarsatyam/incidentops-copilot/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ft-kumarsatyam/incidentops-copilot/issues"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
@@ -46,7 +52,6 @@ otel = [
 ]
 
 [project.scripts]
-workflow-run = "incidentops.cli:main"
 incidentops = "incidentops.cli:main"
 
 [build-system]

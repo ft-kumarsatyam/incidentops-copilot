@@ -4,13 +4,22 @@
 
 A teammate reports "checkout is throwing 5xx" in Slack. Copilot gathers the
 evidence, finds the matching runbook, proposes a severity and a short list of
-reversible actions, and waits. The incident commander reviews it in a web UI
-(or in Slack), ticks the actions they want, and approves. Only then does
+reversible actions, and waits. The incident commander reviews it in a web UI,
+ticks the actions they want, and approves. Only then does
 anything leave the building.
 
-[![CI](https://github.com/ft-kumarsatyam/incidentops-copilot/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![CI](https://github.com/ft-kumarsatyam/incidentops-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/ft-kumarsatyam/incidentops-copilot/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License MIT](https://img.shields.io/badge/license-MIT-green)
+
+![The incident page: pipeline, proposed actions with evidence, and an approval panel](docs/images/decision.png)
+
+<table>
+<tr>
+<td width="66%"><img src="docs/images/incidents.png" alt="Incident queue with live status"></td>
+<td><img src="docs/images/mobile-dark.png" alt="Mobile layout in dark mode"></td>
+</tr>
+</table>
 
 ## Try it in 60 seconds
 
@@ -51,7 +60,7 @@ Prefer the terminal? `make demo` runs one incident end to end.
 | **Workflow** | LangGraph state machine with a SQLite checkpointer; approval is a real `interrupt()` and resume, not a re-run |
 | **Reliability** | Idempotent start and decide, atomic run claiming, n8n dispatch retries with backoff, `failed` state with a retry button, append-only audit log |
 | **Platform** | FastAPI, JSON logs with request and run IDs, optional OpenTelemetry, `/health` and `/ready`, rate limiting, CORS allowlist, body cap, fail-closed auth |
-| **Integrations** | n8n workflow for Slack intake, Slack approval message, GitHub issue creation, shared-secret check and idempotency gate |
+| **Integrations** | n8n workflow for Slack intake, a Slack summary that links to the review page, GitHub issue creation, shared-secret check and idempotency gate |
 | **Quality** | 112 Python tests (94% coverage), 48 UI tests, mypy and ruff clean, eval suite, CI for backend, web and Docker |
 
 ## How it works
@@ -153,8 +162,8 @@ Copy [.env.example](.env.example). The settings you will touch most:
 3. Set the environment values listed in [n8n/README.md](n8n/README.md).
 4. Point Slack events at `/webhook/incidentops/intake`.
 
-The Slack approval message links back to the incident page, so the commander
-can review the evidence and approve in the UI. Duplicate Slack deliveries and
+The Slack message carries the proposal and a link to the incident page, where
+the commander reviews the evidence and approves. Duplicate Slack deliveries and
 double clicks are absorbed by idempotency keys on both sides.
 
 ## Evaluation
@@ -188,6 +197,7 @@ docs/             Architecture, AI design, API, deployment, ADRs
 
 | Read this | To learn |
 |---|---|
+| [Project brief](docs/PROJECT_BRIEF.md) | The two-page summary for engineering leaders: decisions, evidence, limits |
 | [Architecture](docs/ARCHITECTURE.md) | Components, state, lifecycle, failure behavior |
 | [AI design](docs/AI_DESIGN.md) | Agent roles, guardrails, evals, fallback |
 | [API contract](docs/API_CONTRACT.md) | Endpoints, SSE, errors |
@@ -196,7 +206,6 @@ docs/             Architecture, AI design, API, deployment, ADRs
 | [Decision records](docs/adr) | Why LangGraph, SQLite, provider fallback, SSE, React |
 | [Security](SECURITY.md) | Threat model and reporting |
 | [Demo script](docs/DEMO_SCRIPT.md) | A 90-second demo |
-| [Portfolio guide](docs/RESUME_AND_PORTFOLIO.md) | Honest ways to describe this project |
 | [Contributing](CONTRIBUTING.md) | Setup, quality gates, how to extend |
 
 ## Measuring impact

@@ -1,5 +1,8 @@
 # AI design
 
+> **Canonical overview:** [AI_SYSTEM_DESIGN.md](AI_SYSTEM_DESIGN.md) (five planes, flows F1–F9, RoleGraph).
+> This page keeps guardrail, eval, and prompt detail.
+
 IncidentOps uses language models where judgment helps (triage and review) and plain code
 where guarantees matter (gates, retries, approval, dispatch). A model can *propose*; it cannot
 act, skip a gate, or waive a check.

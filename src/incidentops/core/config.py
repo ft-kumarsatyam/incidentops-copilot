@@ -42,13 +42,20 @@ class Settings(BaseSettings):
 
     # AI. "auto" uses Claude when ANTHROPIC_API_KEY is set, otherwise deterministic rules.
     ai_provider: Literal["auto", "claude", "rules"] = "auto"
+    ai_topology: Literal["monolithic", "specialists"] = "monolithic"
     anthropic_api_key: str | None = None
     triage_model: str = "claude-sonnet-5-5"
     critic_model: str = "claude-haiku-5-5"
+    specialist_model: str | None = None
     triage_effort: Literal["low", "medium", "high"] = "medium"
     critic_effort: Literal["low", "medium", "high"] = "low"
     ai_timeout_seconds: float = 45.0
     ai_max_output_tokens: int = 4000
+    rolegraph_max_parallel: int = 4
+
+    # Optional MCP read bridge during research (writes stay on n8n).
+    mcp_enabled: bool = False
+    mcp_servers: list[dict[str, str]] = Field(default_factory=list)
 
     # Workflow behaviour
     max_research_attempts: int = 2

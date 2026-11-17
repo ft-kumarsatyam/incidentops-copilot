@@ -45,6 +45,7 @@ dev = [
   "pre-commit>=3.7",
 ]
 llm = ["anthropic>=0.40"]
+mcp = ["mcp>=1.0"]
 otel = [
   "opentelemetry-api>=1.25",
   "opentelemetry-sdk>=1.25",

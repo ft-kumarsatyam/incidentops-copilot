@@ -2,11 +2,13 @@
 
 import argparse
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from incidentops.core.config import Settings
 from incidentops.core.logging import configure_logging
+from incidentops.persistence.repo import IncidentRepo
 from incidentops.rag import build_runbook_retriever, index_runbooks_for_settings
 from incidentops.workflows.incident import IncidentService
 
@@ -19,6 +21,8 @@ def check(settings: Settings) -> dict[str, Any]:
     return {
         "environment": settings.incidentops_env,
         "fixture_demo": "ready",
+        "ai_topology": settings.ai_topology,
+        "mcp_enabled": settings.mcp_enabled,
         "api_auth": "configured" if settings.incidentops_api_key else "not configured",
         "github_read": "configured" if settings.github_token else "not configured",
         "action_provider": settings.action_provider,
@@ -47,7 +51,28 @@ def build_parser() -> argparse.ArgumentParser:
     runbook_commands.add_parser("index", help="Rebuild the SQLite FTS index")
     query = runbook_commands.add_parser("query", help="Search indexed runbooks")
     query.add_argument("text")
+    digest = commands.add_parser("digest", help="Summarize recent incidents (read-only)")
+    digest.add_argument("--hours", type=int, default=24)
     return parser
+
+
+def run_digest(settings: Settings, hours: int) -> dict[str, Any]:
+    since = datetime.now(UTC) - timedelta(hours=hours)
+    repo = IncidentRepo(settings.database_path)
+    rows, _ = repo.search(limit=200)
+    selected = [
+        {
+            "run_id": row["run_id"],
+            "status": row.get("status"),
+            "severity": row.get("severity"),
+            "service": row.get("service"),
+            "summary": row.get("summary"),
+            "updated_at": row.get("updated_at"),
+        }
+        for row in rows
+        if row.get("updated_at") and row["updated_at"] >= since.isoformat(timespec="milliseconds")
+    ]
+    return {"since_hours": hours, "count": len(selected), "incidents": selected}
 
 
 def run_fixture(settings: Settings, fixture: Path, approval: str | None) -> dict[str, Any]:
@@ -88,6 +113,8 @@ def main() -> None:
             result = {
                 "results": retriever.search(args.text, settings.max_runbook_results),
             }
+    elif args.command == "digest":
+        result = run_digest(settings, args.hours)
     else:
         result = run_fixture(settings, args.fixture, args.approval)
     print(json.dumps(result, indent=2, sort_keys=True, default=_json_default))

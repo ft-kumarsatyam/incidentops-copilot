@@ -106,7 +106,7 @@ def test_researcher_fetches_the_latest_commit_when_a_token_is_set(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        "incidentops.workflows.incident.nodes.fetch_recent_commit",
+        "incidentops.tools.broker.fetch_recent_commit",
         lambda repo, token: {"repo": repo, "recent_deploy": "f00d", "message": "Change cart"},
     )
     payload = {**load_fixture("incident_complete.json"), "github": {"repo": "acme/checkout"}}
@@ -128,7 +128,7 @@ def test_github_outage_does_not_fail_the_run(
     def broken(repo: str, token: str) -> dict[str, Any]:
         raise httpx.ConnectError("github down")
 
-    monkeypatch.setattr("incidentops.workflows.incident.nodes.fetch_recent_commit", broken)
+    monkeypatch.setattr("incidentops.tools.broker.fetch_recent_commit", broken)
     payload = {**load_fixture("incident_complete.json"), "github": {"repo": "acme/checkout"}}
     service = IncidentService(settings.model_copy(update={"github_token": "t"}))
     try:
@@ -151,7 +151,7 @@ def test_each_research_retry_widens_the_runbook_search(
             return []
 
     monkeypatch.setattr(
-        "incidentops.workflows.incident.nodes.build_runbook_retriever",
+        "incidentops.tools.broker.build_runbook_retriever",
         lambda _settings: SpyRetriever(),
     )
     _run(settings, ScriptedProvider(), "incident_ambiguous.json")

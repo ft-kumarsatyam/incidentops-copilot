@@ -11,7 +11,6 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
-import httpx
 from langgraph.types import interrupt
 
 from incidentops.agents.guardrails import deterministic_conflicts, injection_signals
@@ -19,13 +18,9 @@ from incidentops.agents.resilient import TriageProvider
 from incidentops.agents.schemas import AIResult, ProposedAction, Triage, TriageContext
 from incidentops.core.config import Settings
 from incidentops.core.logging import get_logger
-from incidentops.rag import (
-    RunbookRetriever,
-    build_runbook_retriever,
-    expand_runbook_query,
-    rewrite_metadata,
-)
-from incidentops.tools.github import fetch_recent_commit, is_valid_repo, normalize_github
+from incidentops.rag import RunbookRetriever
+from incidentops.tools.broker import retrieve_evidence
+from incidentops.tools.github import normalize_github
 from incidentops.tools.monitoring import normalize_monitoring
 from incidentops.workflows.incident.state import IncidentState
 
@@ -66,12 +61,15 @@ def context_from_state(state: IncidentState) -> TriageContext:
 
 
 def _ai_summary(result: AIResult[Any]) -> dict[str, Any]:
-    return {
+    summary: dict[str, Any] = {
         "provider": result.provider,
         "fallback_reason": result.fallback_reason,
         "input_tokens": result.usage.input_tokens,
         "output_tokens": result.usage.output_tokens,
     }
+    if result.meta.get("ai"):
+        summary.update(result.meta["ai"])
+    return summary
 
 
 def intake(state: IncidentState) -> dict[str, Any]:
@@ -101,67 +99,9 @@ def make_research(settings: Settings, retriever: RunbookRetriever | None = None)
 
     def research(state: IncidentState) -> dict[str, Any]:
         attempt = state.get("retries", 0) + 1
-        timeline = [f"research attempt {attempt}"]
-        monitoring = normalize_monitoring(state.get("monitoring", {}))
-        service = state.get("service") or str(monitoring.get("service", ""))
-
-        github = normalize_github(state.get("github", {}))
-        if state.get("github") and not github.get("repo") and "repo" in state["github"]:
-            timeline.append("github repo ignored: not a valid owner/name")
-        if (
-            settings.github_token
-            and is_valid_repo(github.get("repo"))
-            and not github.get("recent_deploy")
-        ):
-            try:
-                github = {**github, **fetch_recent_commit(github["repo"], settings.github_token)}
-                timeline.append("fetched latest commit from GitHub")
-            except (httpx.HTTPError, ValueError) as error:
-                log.warning("research.github_failed", error=type(error).__name__)
-                timeline.append(f"github unavailable ({type(error).__name__})")
-
-        raw_query = " ".join(
-            [service, state.get("summary", ""), *state.get("symptoms", [])]
-        ).strip()
-        search_query = expand_runbook_query(
-            raw_query,
-            service=service,
-            symptoms=[str(s) for s in state.get("symptoms", [])],
+        update, _timeline = retrieve_evidence(
+            dict(state), settings, attempt=attempt, retriever=retriever
         )
-        rb = retriever or build_runbook_retriever(settings)
-        runbook_hits = rb.search(
-            search_query,
-            settings.max_runbook_results * attempt,
-            prefer=service or None,
-        )
-        timeline.append(f"retrieved {len(runbook_hits)} runbook chunks")
-        if search_query != raw_query:
-            timeline.append("expanded runbook query with service aliases")
-        if monitoring.get("unverified_reason"):
-            timeline.append(
-                f"monitoring unusable ({monitoring['unverified_reason']}); impact is unverified"
-            )
-        elif monitoring.get("timed_out"):
-            timeline.append("monitoring timed out; impact is unverified")
-
-        evidence: list[dict[str, Any]] = []
-        if monitoring:
-            evidence.append({"source": "monitoring", "data": monitoring})
-        if github:
-            evidence.append({"source": "github", "data": github})
-        if runbook_hits:
-            evidence.append({"source": "runbooks", "data": runbook_hits})
-        update: dict[str, Any] = {
-            "monitoring": monitoring,
-            "github": github,
-            "evidence": evidence,
-            "runbook_hits": runbook_hits,
-            "retries": attempt,
-            "timeline": timeline,
-            **rewrite_metadata(raw_query, search_query, service),
-        }
-        if service:
-            update["service"] = service
         return update
 
     return research

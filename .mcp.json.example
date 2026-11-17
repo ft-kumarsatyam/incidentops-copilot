@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "slack-read": {
+      "comment": "Example only — configure a read-only Slack MCP server in your environment",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"]
+    },
+    "gmail-read": {
+      "comment": "Example only — keep OAuth credentials out of the Python API",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-gmail"]
+    }
+  }
+}

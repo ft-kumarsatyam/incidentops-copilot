@@ -68,7 +68,8 @@ def test_an_action_is_only_marked_done_after_the_issue_is_created() -> None:
 
     gate = nodes["Action Idempotency Gate"]["parameters"]["jsCode"]
     assert "done:false" in gate and "seen[key].done" in gate
-    assert connections["Create GitHub Incident"]["main"][0][0]["node"] == "Mark Action Done"
+    assert connections["Create GitHub Incident"]["main"][0][0]["node"] == "Prepare Email Status"
+    assert connections["Send Email Status"]["main"][0][0]["node"] == "Mark Action Done"
     assert connections["Mark Action Done"]["main"][0][0]["node"] == "Return Decision"
     assert "done:true" in nodes["Mark Action Done"]["parameters"]["jsCode"]
 

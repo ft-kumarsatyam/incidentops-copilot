@@ -23,7 +23,7 @@ def test_auto_with_a_key_uses_claude(settings: Settings) -> None:
     provider = build_provider(keyed)
 
     assert provider.primary is not None
-    assert provider.name == "claude"
+    assert provider.name.startswith("rolegraph:")
 
 
 def test_claude_mode_without_a_key_is_a_startup_error(settings: Settings) -> None:

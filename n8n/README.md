@@ -17,6 +17,8 @@ activate it.
 | `SLACK_BOT_TOKEN` | Bot allowed to post in the incident channel |
 | `GITHUB_TOKEN` | Issue-write token scoped to one repository |
 | `GITHUB_REPO` | `owner/repository` |
+| `NOTIFY_EMAIL_TO` | Optional status email after approval (SMTP must be configured in n8n) |
+| `NOTIFY_FROM_EMAIL` | From address for status email |
 
 n8n 2.x blocks `$env` inside nodes by default. Compose sets
 `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` because this workflow reads its settings

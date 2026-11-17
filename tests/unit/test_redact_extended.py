@@ -15,7 +15,7 @@ from incidentops.core.redact import REDACTED, redact, redact_text
         ("-----BEGIN PRIVATE KEY-----\nMIIabc\n(truncated paste)", "MIIabc"),
         ("jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop", "eyJhbGciOiJ"),
         ("AIza" + "A" * 35, "AIzaAAAA"),
-        # Built at runtime so GitHub push protection does not treat the fixture as a live Stripe key.
+        # Built at runtime so push protection does not treat the fixture as a live Stripe key.
         ("stripe " + "sk_live_" + "a" * 24, "sk_live_" + "a" * 6),
         ("Authorization: Basic dXNlcjpwYXNzd29yZA==", "dXNlcjpwYXNzd29yZA"),
         ("sk-ant-api03-abcdefghijklmnopqrstuvwxyz", "sk-ant-api03"),

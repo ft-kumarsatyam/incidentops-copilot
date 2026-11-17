@@ -26,11 +26,20 @@ export interface RunbookHit {
   excerpt: string;
 }
 
+export interface AiRoleInvocation {
+  role_id: string;
+  provider: string;
+  input_tokens: number;
+  output_tokens: number;
+}
+
 export interface AiInfo {
   provider: string;
   fallback_reason: string | null;
   input_tokens: number;
   output_tokens: number;
+  topology?: string;
+  roles?: AiRoleInvocation[];
 }
 
 export interface Incident {

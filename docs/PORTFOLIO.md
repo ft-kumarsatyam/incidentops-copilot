@@ -35,9 +35,11 @@ Multi-agent here means **roles with boundaries**, not a large swarm:
 | Critic | Bounded review loop back into research |
 | Human | LangGraph `interrupt()` before any dispatch |
 
-A five-agent specialist graph was benchmarked and **rejected** (no quality gain,
-higher latency). See [ADR 006](adr/006-reject-specialist-swarm-for-current-scope.md)
-and [evals/architecture_report.md](../evals/architecture_report.md).
+Optional **RoleGraph** parallel specialists (`AI_TOPOLOGY=specialists`) reuse the
+same guardrails; default remains monolithic until evals clear the adoption gate.
+See [AI system design](AI_SYSTEM_DESIGN.md), [ORCHESTRATION.md](ORCHESTRATION.md),
+[ADR 006](adr/006-reject-specialist-swarm-for-current-scope.md), and
+[evals/architecture_report.md](../evals/architecture_report.md).
 
 ## RAG (show this in system-design rounds)
 

@@ -10,7 +10,12 @@
         "conflict": null,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -19,7 +24,12 @@
         "conflict": null,
         "runbook": true,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -28,7 +38,12 @@
         "conflict": null,
         "runbook": true,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -37,7 +52,12 @@
         "conflict": true,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -46,7 +66,12 @@
         "conflict": null,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -55,7 +80,12 @@
         "conflict": null,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -64,7 +94,12 @@
         "conflict": null,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -73,7 +108,12 @@
         "conflict": null,
         "runbook": null,
         "safety": true,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -82,7 +122,12 @@
         "conflict": null,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -91,24 +136,29 @@
         "conflict": null,
         "runbook": null,
         "safety": true,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       }
     ],
     "latency_ms": [
-      8.974084,
-      6.387417,
-      4.605583,
-      5.373833,
-      4.574375,
-      5.05575,
-      5.331167,
-      4.272833,
-      4.287208,
-      4.110083
+      8.928708,
+      3.805334,
+      3.827167,
+      5.226333,
+      3.924209,
+      3.4605,
+      5.183792,
+      3.476292,
+      3.672625,
+      3.915709
     ]
   },
   "specialists": {
-    "name": "Parallel specialists",
+    "name": "Parallel specialists (RoleGraph rules)",
     "roles": 5,
     "case_checks": [
       {
@@ -118,7 +168,12 @@
         "conflict": null,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -127,7 +182,12 @@
         "conflict": null,
         "runbook": true,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -136,7 +196,12 @@
         "conflict": null,
         "runbook": true,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -145,7 +210,12 @@
         "conflict": true,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -154,7 +224,12 @@
         "conflict": null,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -163,7 +238,12 @@
         "conflict": null,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -172,7 +252,12 @@
         "conflict": null,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -181,7 +266,12 @@
         "conflict": null,
         "runbook": null,
         "safety": true,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -190,7 +280,12 @@
         "conflict": null,
         "runbook": null,
         "safety": null,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       },
       {
         "status": true,
@@ -199,20 +294,25 @@
         "conflict": null,
         "runbook": null,
         "safety": true,
-        "grounded": true
+        "grounded": true,
+        "bounded": true,
+        "no_leak": null,
+        "flagged": null,
+        "calibration": null,
+        "actions": null
       }
     ],
     "latency_ms": [
-      32.2305,
-      22.710709,
-      17.166167,
-      9.712083,
-      6.253625,
-      7.573625,
-      9.816208,
-      6.266042,
-      6.384459,
-      6.007417
+      8.934917,
+      5.979041,
+      5.600459,
+      10.150875,
+      6.191833,
+      5.69525,
+      9.345666,
+      5.528042,
+      5.445,
+      6.5845
     ]
   },
   "adopt": false

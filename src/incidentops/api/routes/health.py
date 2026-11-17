@@ -40,6 +40,12 @@ def ready(
     checks["action_provider"] = settings.action_provider
     checks["action_webhook"] = "configured" if action_url else "not_configured"
     healthy = checks["database"] == "ok" and checks["runbook_index"] == "ok"
+    checks["ai_topology"] = settings.ai_topology
+    checks["mcp_enabled"] = "true" if settings.mcp_enabled else "false"
     if not healthy:
         response.status_code = 503
-    return {"status": "ready" if healthy else "degraded", "checks": checks}
+    return {
+        "status": "ready" if healthy else "degraded",
+        "checks": checks,
+        "ai": {"topology": settings.ai_topology, "mcp_enabled": settings.mcp_enabled},
+    }

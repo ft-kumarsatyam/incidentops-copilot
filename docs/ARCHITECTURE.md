@@ -47,6 +47,8 @@ request to n8n, which owns the integrations.
 | Application service | `workflows/incident/service.py` | `start`, `decide`, `retry_dispatch`, `search`, audit, event publishing |
 | Workflow | `workflows/incident/{state,nodes,graph}.py` | The state machine and its nodes |
 | AI layer | `src/incidentops/agents/` | Provider protocol, Claude and rules providers, guardrails, prompts |
+| RoleGraph | `src/incidentops/orchestration/` | Cognitive topology inside `assess` (see [AI_SYSTEM_DESIGN.md](AI_SYSTEM_DESIGN.md)) |
+| Tool broker | `src/incidentops/tools/broker.py` | Unified research evidence + optional MCP read |
 | Persistence | `persistence/repo.py`, LangGraph `SqliteSaver` | Checkpoints, queryable incident index, append-only audit log |
 | Tools | `src/incidentops/tools/` | Runbook search, GitHub context, monitoring, n8n client with retries |
 | Core | `src/incidentops/core/` | Settings, structured logging, redaction, tracing, domain errors |

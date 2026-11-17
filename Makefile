@@ -2,7 +2,7 @@
 PY ?= .venv/bin/python
 BIN := .venv/bin
 
-.PHONY: help setup index dev serve demo test cov eval eval-guardrails eval-claude eval-architecture eval-retrieval lint format typecheck check web-install web-dev web-build web-test up down clean
+.PHONY: help setup index dev serve demo test cov eval eval-guardrails eval-claude eval-architecture eval-retrieval e2e-smoke lint format typecheck check web-install web-dev web-build web-test up down clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-11s\033[0m %s\n", $$1, $$2}'
@@ -56,6 +56,10 @@ eval-claude: ## Compare rules vs Claude on the labeled incidents (needs ANTHROPI
 
 eval-architecture: ## Test whether parallel specialist agents beat the current graph
 	$(PY) -m evals.compare_architectures
+
+e2e-smoke: index demo ## End-to-end CLI smoke (demo fixture + timeline asserts)
+	@INCIDENTOPS_ENV=dev LOG_LEVEL=ERROR $(BIN)/incidentops incident \
+		--fixture tests/fixtures/incident_complete.json | $(PY) -c "import json,sys; s=json.load(sys.stdin); t=' '.join(s.get('timeline',[])); assert 'research' in t and 'assessed' in t, t"
 
 eval-retrieval: ## Score runbook retrieval (FTS vs query rewrite; hybrid when [rag] is installed)
 	$(PY) -m evals.run_retrieval_evals --modes fts,rewrite,hybrid

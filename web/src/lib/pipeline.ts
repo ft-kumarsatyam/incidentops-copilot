@@ -10,7 +10,11 @@ export interface Stage {
 }
 
 /** Derive a six-step progress view from the run status. Pure, so it is easy to test. */
-export function pipelineStages(incident: Pick<Incident, "status" | "approval" | "action_dispatch">): Stage[] {
+export function pipelineStages(
+  incident: Pick<Incident, "status" | "approval" | "action_dispatch"> & {
+    ai?: Incident["ai"];
+  },
+): Stage[] {
   const { status, approval, action_dispatch: dispatch } = incident;
   const stages: Stage[] = [
     { id: "intake", label: "Report received", state: "done" },
@@ -28,10 +32,15 @@ export function pipelineStages(incident: Pick<Incident, "status" | "approval" | 
     }
   };
 
+  const specialistNote =
+    incident.ai?.topology === "specialists"
+      ? `Parallel roles (${incident.ai.roles?.length ?? 3})`
+      : undefined;
+
   switch (status) {
     case "running":
     case "busy":
-      set("triage", "current");
+      set("triage", "current", specialistNote);
       set("review", "pending");
       break;
     case "awaiting_approval":

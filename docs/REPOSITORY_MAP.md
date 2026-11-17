@@ -20,6 +20,7 @@ Where to look for each concern. Optimized for reviewers and future you.
 ```text
 api/           HTTP: FastAPI factory, routes, SSE, middleware, auth
 agents/        LLM providers (Claude, rules), schemas, guardrails, prompts
+orchestration/ RoleGraph: parallel roles, merge, TopologyRegistry
 workflows/     LangGraph incident graph + IncidentService
 rag/           Runbook RAG: FTS index, query rewrite, hybrid rerank, retriever API
 tools/         External tools (GitHub, monitoring, n8n) + legacy RAG shims
@@ -53,11 +54,12 @@ agents/        Provider and specialist experiments
 
 ## `docs/` (reading order for interviews)
 
-1. [PORTFOLIO.md](PORTFOLIO.md) — 3-minute story
-2. [RAG_SYSTEM_DESIGN.md](RAG_SYSTEM_DESIGN.md) — deep dive on retrieval
-3. [AI_DESIGN.md](AI_DESIGN.md) — agents + guardrails
-4. [ARCHITECTURE.md](ARCHITECTURE.md) — runtime and state
-5. [adr/](adr/) — decisions with evidence
+1. [AI_SYSTEM_DESIGN.md](AI_SYSTEM_DESIGN.md) — canonical AI layers and flows
+2. [PORTFOLIO.md](PORTFOLIO.md) — 3-minute story
+3. [RAG_SYSTEM_DESIGN.md](RAG_SYSTEM_DESIGN.md) — deep dive on retrieval
+4. [AI_DESIGN.md](AI_DESIGN.md) — agents + guardrails (detail)
+5. [ARCHITECTURE.md](ARCHITECTURE.md) — runtime and state
+6. [adr/](adr/) — decisions with evidence
 
 ## Commands cheat sheet
 

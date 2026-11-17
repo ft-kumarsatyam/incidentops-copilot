@@ -126,10 +126,20 @@ def render(baseline: ArchitectureResult, specialists: ArchitectureResult) -> str
 
 
 def main() -> None:
+    import os
+
     cases = load_cases()
     baseline = run_architecture("Current graph", 2, RulesProvider, cases)
-    specialists = run_architecture("Parallel specialists", 5, SpecialistProvider, cases)
+    specialists = run_architecture(
+        "Parallel specialists (RoleGraph rules)", 5, SpecialistProvider, cases
+    )
     report = render(baseline, specialists)
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        report += (
+            "\n## LLM specialists\n\n"
+            "Set `AI_TOPOLOGY=specialists` and `AI_PROVIDER=claude` to benchmark LLM partial "
+            "roles; guardrails and merge stay shared. Not run in CI (token cost).\n"
+        )
     output = Path(__file__).parent / "architecture_report.md"
     output.write_text(report, encoding="utf-8")
     raw = {

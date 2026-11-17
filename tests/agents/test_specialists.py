@@ -7,7 +7,7 @@ from tests.conftest import load_fixture
 def test_specialist_subgraph_has_three_parallel_roles() -> None:
     nodes = set(build_specialist_graph().get_graph().nodes)
 
-    assert {"impact_specialist", "change_specialist", "runbook_specialist", "synthesize"} <= nodes
+    assert {"role_impact", "role_change", "role_runbook", "merge"} <= nodes
 
 
 def test_specialists_preserve_baseline_safety_and_output(settings) -> None:

@@ -229,6 +229,66 @@
         1540,
         460
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json; const to = String($env.NOTIFY_EMAIL_TO || '').trim(); if (!to) { return [{json:{...b, email:'skipped'}}]; } return [{json:{...b, email_to:to, email_subject:'IncidentOps: ' + (b.run_id || 'unknown') + ' approved', email_text:'Approved actions for ' + (b.summary || 'incident') + ':\\n- ' + (b.approved_actions || []).join('\\n- ') + '\\n\\nIdempotency: ' + (b.idempotency_key || '')}}];"
+      },
+      "id": "prepare-email",
+      "name": "Prepare Email Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{Boolean($json.email_to)}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "email-configured",
+      "name": "Email Configured?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1430,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$env.NOTIFY_FROM_EMAIL || 'incidentops@localhost'}}",
+        "toEmail": "={{$json.email_to}}",
+        "subject": "={{$json.email_subject}}",
+        "text": "={{$json.email_text}}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email Status",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1650,
+        400
+      ]
     }
   ],
   "connections": {
@@ -317,6 +377,46 @@
       ]
     },
     "Create GitHub Incident": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email Status": {
+      "main": [
+        [
+          {
+            "node": "Email Configured?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Configured?": {
+      "main": [
+        [
+          {
+            "node": "Send Email Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Action Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email Status": {
       "main": [
         [
           {

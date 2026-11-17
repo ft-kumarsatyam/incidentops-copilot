@@ -107,6 +107,7 @@ class AIResult(Generic[T]):
     provider: str
     usage: Usage = field(default_factory=Usage)
     fallback_reason: str | None = None
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 class ProviderError(RuntimeError):

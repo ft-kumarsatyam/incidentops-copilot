@@ -12,8 +12,12 @@ dist/
 build/
 .pytest_cache/
 .mypy_cache/
+.dmypy.json
 .ruff_cache/
+.hypothesis/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 
 # Secrets & local config
@@ -21,6 +25,7 @@ htmlcov/
 .env.*
 !.env.example
 *.pem
+*.key
 credentials.json
 secrets/
 
@@ -29,6 +34,7 @@ secrets/
 .vscode/
 *.swp
 .DS_Store
+Thumbs.db
 
 # Runtime / agent state
 .runs/
@@ -37,6 +43,12 @@ secrets/
 graphify-out/
 logs/
 *.log
+# Local SQLite files (incidents, checkpoints, runbook index) and their journals
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 data/raw/
 data/processed/
 !data/.gitkeep
@@ -44,8 +56,11 @@ data/processed/
 # n8n
 n8n/.n8n/
 # Web UI
+node_modules/
 web/node_modules/
 web/dist/
+web/coverage/
+web/.vite/
 src/incidentops/static/
 *.tsbuildinfo
 
@@ -57,3 +72,9 @@ docs/private/
 CLAUDE.md
 CLAUDE.local.md
 .mcp.json
+.cursor/
+.cursorrules
+.windsurf/
+.aider*
+.codex/
+.gemini/

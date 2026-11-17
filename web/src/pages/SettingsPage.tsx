@@ -1,5 +1,5 @@
 import { CheckCircle2, Loader2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useToast } from "../hooks/useToast";
 import { api } from "../lib/api";
 import { saveSettings, useSettings } from "../lib/settings";
@@ -11,6 +11,16 @@ export function SettingsPage() {
   const toast = useToast();
   const [testing, setTesting] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [serverAi, setServerAi] = useState<{ topology?: string; mcp_enabled?: boolean } | null>(null);
+
+  useEffect(() => {
+    void fetch("/ready")
+      .then((response) => response.json())
+      .then((body: { ai?: { topology?: string; mcp_enabled?: boolean } }) => {
+        setServerAi(body.ai ?? null);
+      })
+      .catch(() => setServerAi(null));
+  }, []);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -44,6 +54,16 @@ export function SettingsPage() {
         <h1 className="text-2xl font-semibold">Settings</h1>
         <p className="text-muted mt-1 text-sm">Stored in this browser only. They are never sent anywhere except your IncidentOps server.</p>
       </div>
+      {serverAi && (
+        <div className="bg-surface2 rounded-lg border border-line p-4 text-sm">
+          <p className="font-medium">Server AI configuration</p>
+          <p className="text-muted mt-1">
+            Topology: <span className="text-fg font-mono">{serverAi.topology ?? "unknown"}</span>
+            {" · "}
+            MCP read bridge: <span className="text-fg font-mono">{serverAi.mcp_enabled ? "on" : "off"}</span>
+          </p>
+        </div>
+      )}
       <form onSubmit={submit} className="space-y-5">
         <div>
           <label htmlFor="actor" className="mb-1 block text-sm font-medium">

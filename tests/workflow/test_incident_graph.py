@@ -42,11 +42,15 @@ def test_low_confidence_escalates_instead_of_asking_for_approval(settings: Setti
     assert any("confidence below threshold" in entry for entry in result["timeline"])
 
 
-def test_monitoring_timeout_is_preserved_as_evidence(service: IncidentService) -> None:
+def test_monitoring_timeout_means_unverified_impact_so_a_human_decides(
+    service: IncidentService,
+) -> None:
     result = service.start(load_fixture("incident_monitoring_timeout.json"))
 
     assert result["monitoring"]["timed_out"] is True
-    assert result["severity"] == "SEV-3"
+    assert result["status"] == "needs_human"
+    assert any("monitoring timed out" in entry for entry in result["timeline"])
+    assert any("confidence below threshold" in entry for entry in result["timeline"])
 
 
 def test_resubmitting_a_run_returns_the_stored_run(service: IncidentService) -> None:

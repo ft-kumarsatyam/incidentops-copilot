@@ -1,0 +1,25 @@
+{
+  "name": "auth-degradation-sev2",
+  "input": {
+    "run_id": "eval-auth-sev2",
+    "channel_id": "C-INCIDENTS",
+    "thread_ts": "1700000000.0001",
+    "reporter": "U-ONCALL",
+    "summary": "Sign-in is slow and sometimes failing",
+    "service": "auth-api",
+    "owner": "identity-oncall",
+    "symptoms": [
+      "intermittent login failures"
+    ],
+    "monitoring": {
+      "service": "auth-api",
+      "error_rate": 0.05
+    },
+    "github": {}
+  },
+  "expect": {
+    "status": "awaiting_approval",
+    "severity": "SEV-2",
+    "cites_runbook": "auth-api.md"
+  }
+}

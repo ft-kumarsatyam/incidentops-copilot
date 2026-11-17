@@ -32,6 +32,16 @@ class Settings(BaseSettings):
     max_runbook_results: int = 3
     auto_index_runbooks: bool = False
 
+    # AI. "auto" uses Claude when ANTHROPIC_API_KEY is set, otherwise deterministic rules.
+    ai_provider: Literal["auto", "claude", "rules"] = "auto"
+    anthropic_api_key: str | None = None
+    triage_model: str = "claude-sonnet-5-5"
+    critic_model: str = "claude-haiku-5-5"
+    triage_effort: Literal["low", "medium", "high"] = "medium"
+    critic_effort: Literal["low", "medium", "high"] = "low"
+    ai_timeout_seconds: float = 45.0
+    ai_max_output_tokens: int = 4000
+
     # Workflow behaviour
     max_research_attempts: int = 2
     confidence_threshold: float = 0.8

@@ -1,0 +1,25 @@
+{
+  "name": "monitoring-timeout",
+  "input": {
+    "run_id": "inc-demo-timeout",
+    "channel_id": "C-INCIDENTS",
+    "thread_ts": "1700000002.0001",
+    "reporter": "U-ONCALL",
+    "summary": "Search latency has increased",
+    "service": "search-api",
+    "owner": "search-oncall",
+    "symptoms": [
+      "p95 latency above SLO"
+    ],
+    "monitoring": {
+      "service": "search-api",
+      "timed_out": true
+    },
+    "github": {
+      "repo": "acme/search"
+    }
+  },
+  "expect": {
+    "status": "needs_human"
+  }
+}

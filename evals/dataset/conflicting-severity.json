@@ -1,0 +1,25 @@
+{
+  "name": "conflicting-severity",
+  "input": {
+    "run_id": "inc-demo-conflict",
+    "channel_id": "C-INCIDENTS",
+    "thread_ts": "1700000003.0001",
+    "reporter": "U-ONCALL",
+    "summary": "Authentication failures affect most sign-ins",
+    "service": "auth-api",
+    "owner": "identity-oncall",
+    "symptoms": [
+      "customer outage"
+    ],
+    "monitoring": {
+      "service": "auth-api",
+      "error_rate": 0.2,
+      "severity": "low"
+    },
+    "github": {}
+  },
+  "expect": {
+    "status": "needs_human",
+    "has_conflict": true
+  }
+}

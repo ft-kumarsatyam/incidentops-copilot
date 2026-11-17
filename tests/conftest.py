@@ -25,6 +25,8 @@ def settings(tmp_path: Path) -> Settings:
     return Settings(
         _env_file=None,  # type: ignore[call-arg]
         incidentops_env="dev",
+        ai_provider="rules",  # tests never call a real model, even if a key is set in the env
+        anthropic_api_key=None,
         database_path=tmp_path / "incidentops.db",
         runbook_dir=ROOT / "runbooks",
         runbook_db=runbook_db,

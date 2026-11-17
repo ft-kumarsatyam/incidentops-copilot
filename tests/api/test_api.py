@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -102,9 +103,77 @@ def test_ready_reports_dependencies(client: TestClient, settings: Settings) -> N
     assert client.get("/ready").status_code == 503
 
 
-def test_dashboard_is_served(client: TestClient) -> None:
-    assert client.get("/").status_code == 200
-    assert client.get("/assets/app.css").status_code == 200
+def test_hint_page_when_the_ui_is_not_built(client: TestClient) -> None:
+    page = client.get("/")
+
+    assert page.status_code == 200
+    assert "web UI is not built" in page.text
+
+
+def test_built_ui_is_served_without_shadowing_the_api(settings: Settings, tmp_path: Path) -> None:
+    (tmp_path / "ui").mkdir()
+    (tmp_path / "ui" / "index.html").write_text("<title>UI</title>", encoding="utf-8")
+    served = settings.model_copy(
+        update={"static_dir": tmp_path / "ui", "incidentops_api_key": "test-secret"}
+    )
+    with TestClient(create_app(served)) as client:
+        assert "<title>UI</title>" in client.get("/").text
+        assert client.get("/health").json() == {"status": "ok"}
+        assert client.get("/incidents").status_code == 401  # API route, not a static file
+
+
+def test_partial_approval_dispatches_only_the_chosen_actions(settings: Settings) -> None:
+    sent: list[dict[str, Any]] = []
+    wired = settings.model_copy(update={"n8n_action_webhook_url": "https://n8n.example/a"})
+    app = create_app(wired)
+    app.state.service._dispatcher = lambda url, payload, **kw: sent.append(payload) or {}
+    incident = load_fixture("incident_complete.json")
+    with TestClient(app) as client:
+        created = client.post("/incidents", json=incident).json()
+        chosen = created["proposed_actions"][:2]
+        response = client.post(
+            f"/incidents/{incident['run_id']}/decision",
+            json={
+                "idempotency_key": incident["run_id"],
+                "decision": "approved",
+                "approved_actions": chosen,
+            },
+        )
+
+    assert response.json()["approved_actions"] == chosen
+    assert sent[0]["approved_actions"] == chosen
+
+
+def test_approval_validates_the_chosen_actions(client: TestClient) -> None:
+    incident = load_fixture("incident_complete.json")
+    client.post("/incidents", json=incident, headers=KEY)
+    path = f"/incidents/{incident['run_id']}/decision"
+    base = {"idempotency_key": incident["run_id"], "decision": "approved"}
+
+    invented = client.post(path, json={**base, "approved_actions": ["Wipe it"]}, headers=KEY)
+    nothing = client.post(path, json={**base, "approved_actions": []}, headers=KEY)
+
+    assert invented.status_code == nothing.status_code == 409
+    still_open = client.get(f"/incidents/{incident['run_id']}", headers=KEY).json()
+    assert still_open["status"] == "awaiting_approval"  # a bad request must not consume the run
+
+
+def test_rejection_approves_no_actions(client: TestClient) -> None:
+    incident = load_fixture("incident_complete.json")
+    client.post("/incidents", json=incident, headers=KEY)
+
+    rejected = client.post(
+        f"/incidents/{incident['run_id']}/decision",
+        json={"idempotency_key": incident["run_id"], "decision": "rejected"},
+        headers=KEY,
+    ).json()
+
+    assert rejected["status"] == "cancelled"
+    assert rejected["approved_actions"] == []
+
+
+def test_stream_requires_auth_and_is_not_captured_by_the_run_id_route(client: TestClient) -> None:
+    assert client.get("/incidents/stream").status_code == 401
 
 
 def test_oversized_bodies_are_rejected(settings: Settings) -> None:

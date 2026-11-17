@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+/* Design tokens. Light by default, dark via OS preference or the manual toggle. */
+:root {
+  color-scheme: light;
+  --canvas: #f5f3ee;
+  --surface: #ffffff;
+  --surface-2: #faf8f4;
+  --fg: #15191f;
+  --muted: #566070;
+  --line: #e1dccf;
+  --brand: #0b6b63;
+  --brand-hover: #09554f;
+  --brand-fg: #ffffff;
+  --danger: #b3261e;
+  --danger-bg: #fdecea;
+  --warn: #8a5300;
+  --warn-bg: #fff3dc;
+  --info: #1d5f99;
+  --info-bg: #e7f1fb;
+  --ok: #1a6b3c;
+  --ok-bg: #e5f4ea;
+  --neutral-bg: #eceae4;
+  --ring: #0b6b63;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: #0f1318;
+    --surface: #171c23;
+    --surface-2: #1c222b;
+    --fg: #eceff3;
+    --muted: #9aa5b4;
+    --line: #2b333f;
+    --brand: #3fb5a8;
+    --brand-hover: #5cc8bc;
+    --brand-fg: #06201d;
+    --danger: #ff8a80;
+    --danger-bg: #3a1c1a;
+    --warn: #ffc266;
+    --warn-bg: #36280f;
+    --info: #86bff2;
+    --info-bg: #14283a;
+    --ok: #7bd49b;
+    --ok-bg: #14301f;
+    --neutral-bg: #232a34;
+    --ring: #3fb5a8;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #0f1318;
+  --surface: #171c23;
+  --surface-2: #1c222b;
+  --fg: #eceff3;
+  --muted: #9aa5b4;
+  --line: #2b333f;
+  --brand: #3fb5a8;
+  --brand-hover: #5cc8bc;
+  --brand-fg: #06201d;
+  --danger: #ff8a80;
+  --danger-bg: #3a1c1a;
+  --warn: #ffc266;
+  --warn-bg: #36280f;
+  --info: #86bff2;
+  --info-bg: #14283a;
+  --ok: #7bd49b;
+  --ok-bg: #14301f;
+  --neutral-bg: #232a34;
+  --ring: #3fb5a8;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brandhover: var(--brand-hover);
+  --color-brandfg: var(--brand-fg);
+  --color-danger: var(--danger);
+  --color-dangerbg: var(--danger-bg);
+  --color-warn: var(--warn);
+  --color-warnbg: var(--warn-bg);
+  --color-info: var(--info);
+  --color-infobg: var(--info-bg);
+  --color-ok: var(--ok);
+  --color-okbg: var(--ok-bg);
+  --color-neutralbg: var(--neutral-bg);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html {
+  background: var(--canvas);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--canvas);
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+dialog::backdrop {
+  background: rgb(8 12 16 / 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@keyframes shimmer {
+  0% { opacity: 0.55; }
+  50% { opacity: 1; }
+  100% { opacity: 0.55; }
+}
+.skeleton {
+  animation: shimmer 1.4s ease-in-out infinite;
+  background: var(--neutral-bg);
+  border-radius: 6px;
+}

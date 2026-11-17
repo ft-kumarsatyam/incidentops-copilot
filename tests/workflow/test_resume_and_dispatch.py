@@ -128,3 +128,32 @@ def test_actor_is_recorded_in_the_audit_log(service: IncidentService) -> None:
     actors = [(entry["event"], entry["actor"]) for entry in service.audit(payload["run_id"])]
     assert ("created", "alice") in actors
     assert ("decision:approved", "bob") in actors
+
+
+def test_service_publishes_an_event_whenever_a_run_changes(service: IncidentService) -> None:
+    seen: list[dict[str, Any]] = []
+    service.events.publish = seen.append  # type: ignore[method-assign]
+    payload = load_fixture("incident_complete.json")
+
+    service.start(payload)
+    service.decide(payload["run_id"], payload["run_id"], "approved")
+
+    assert seen[0] == {
+        "type": "incident",
+        "run_id": payload["run_id"],
+        "status": "awaiting_approval",
+    }
+    assert seen[-1]["status"] == "succeeded"
+    assert {event["run_id"] for event in seen} == {payload["run_id"]}
+
+
+def test_decision_that_fails_validation_publishes_nothing(service: IncidentService) -> None:
+    payload = load_fixture("incident_complete.json")
+    service.start(payload)
+    seen: list[dict[str, Any]] = []
+    service.events.publish = seen.append  # type: ignore[method-assign]
+
+    with pytest.raises(IncidentConflictError):
+        service.decide(payload["run_id"], payload["run_id"], "approved", approved_actions=["nope"])
+
+    assert seen == []

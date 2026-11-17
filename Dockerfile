@@ -1,8 +1,20 @@
-FROM python:3.12-slim
+# syntax=docker/dockerfile:1
 
+# ---- Stage 1: build the web UI ------------------------------------------------------------
+FROM node:22-slim AS web
+WORKDIR /app/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+# vite.config.ts writes to ../src/incidentops/static, i.e. /app/src/incidentops/static
+RUN npm run build
+
+# ---- Stage 2: the API, serving the built UI -----------------------------------------------
+FROM python:3.12-slim
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
+COPY --from=web /app/src/incidentops/static ./src/incidentops/static
 COPY runbooks ./runbooks
 RUN pip install --no-cache-dir .
 

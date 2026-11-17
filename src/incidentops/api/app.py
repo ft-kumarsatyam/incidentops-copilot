@@ -18,7 +18,14 @@ from incidentops.core.logging import configure_logging, get_logger
 from incidentops.tools.runbooks import index_runbooks
 from incidentops.workflows.incident.service import IncidentService
 
-DASHBOARD = Path(__file__).resolve().parents[1] / "dashboard"
+PACKAGED_UI = Path(__file__).resolve().parents[1] / "static"
+
+NO_UI = """<!doctype html><title>IncidentOps</title>
+<body style="font:16px system-ui;max-width:40rem;margin:4rem auto;padding:0 1rem">
+<h1>IncidentOps API is running</h1>
+<p>The web UI is not built. For development run <code>make web-dev</code> (UI on :5173).
+To serve it from this process run <code>make web-build</code>, or use Docker.</p>
+<p>API docs: <a href="/docs">/docs</a></p></body>"""
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -56,10 +63,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(incidents.router)
 
-    app.mount("/assets", StaticFiles(directory=DASHBOARD), name="dashboard-assets")
+    ui_dir = settings.static_dir or PACKAGED_UI
+    if (ui_dir / "index.html").is_file():
+        # Mounted last so every API route above takes precedence. The UI uses hash routing,
+        # so no server-side history fallback is needed.
+        app.mount("/", StaticFiles(directory=ui_dir, html=True), name="web")
+    else:
 
-    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-    def dashboard_page() -> str:
-        return (DASHBOARD / "index.html").read_text(encoding="utf-8")
+        @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+        def ui_not_built() -> str:
+            return NO_UI
 
     return app

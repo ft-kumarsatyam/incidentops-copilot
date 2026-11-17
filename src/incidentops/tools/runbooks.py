@@ -2,6 +2,7 @@
 
 import re
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +46,8 @@ def index_runbooks(directory: Path, database: Path) -> int:
                 (relative, doc, title, content) for title, content in _chunks(text, path.stem)
             )
 
-    with sqlite3.connect(database) as connection:
+    # sqlite3's own context manager commits but does NOT close, so wrap it in closing().
+    with closing(sqlite3.connect(database)) as connection, connection:
         # Full rebuild, so the schema can evolve without a migration.
         connection.execute("DROP TABLE IF EXISTS runbook_chunks")
         connection.execute(
@@ -70,7 +72,7 @@ def search_runbooks(
     expression = " OR ".join(f'"{term}"' for term in terms)
     name = f"{prefer.strip().lower()}.md" if prefer else ""
     try:
-        with sqlite3.connect(database) as connection:
+        with closing(sqlite3.connect(database)) as connection:
             connection.row_factory = sqlite3.Row
             rows = connection.execute(
                 "SELECT path, title, snippet(runbook_chunks, 3, '[', ']', '…', 24) AS excerpt, "

@@ -213,8 +213,9 @@ def finalize(state: IncidentState) -> dict[str, Any]:
         return {"approval_required": False, "timeline": ["escalated to a human"]}
 
     approval = state.get("approval")
+    approved_actions = state.get("approved_actions")
     if approval is None:
-        approval = interrupt(
+        resumed = interrupt(
             {
                 "run_id": state["run_id"],
                 "idempotency_key": state["idempotency_key"],
@@ -222,7 +223,16 @@ def finalize(state: IncidentState) -> dict[str, Any]:
                 "proposed_actions": state["proposed_actions"],
             }
         )
+        # A bare string is still accepted so older callers and tests keep working.
+        if isinstance(resumed, dict):
+            approval = resumed["decision"]
+            approved_actions = resumed.get("approved_actions")
+        else:
+            approval = resumed
+    if approved_actions is None:
+        approved_actions = state["proposed_actions"] if approval == "approved" else []
     return {
+        "approved_actions": approved_actions,
         "approval": approval,
         "approval_required": False,
         "status": "succeeded" if approval == "approved" else "cancelled",

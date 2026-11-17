@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from incidentops.tools.runbooks import index_runbooks, search_runbooks
 
 
@@ -38,9 +40,34 @@ def test_prefer_ranks_the_services_own_runbook_first(tmp_path: Path) -> None:
 
 def test_old_index_schema_degrades_to_no_results(tmp_path: Path) -> None:
     import sqlite3
+    from contextlib import closing
 
     database = tmp_path / "old.db"
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection:
         connection.execute("CREATE VIRTUAL TABLE runbook_chunks USING fts5(path, title, content)")
 
     assert search_runbooks(database, "anything here") == []
+
+
+def test_runbook_search_and_index_do_not_leak_connections(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sqlite3
+
+    opened: list[sqlite3.Connection] = []
+    real_connect = sqlite3.connect
+
+    def tracking_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
+        connection = real_connect(*args, **kwargs)  # type: ignore[arg-type]
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(sqlite3, "connect", tracking_connect)
+    database = tmp_path / "rb.db"
+    index_runbooks(_write(tmp_path / "runbooks"), database)
+    search_runbooks(database, "sign-in outage")
+
+    assert opened
+    for connection in opened:
+        with pytest.raises(sqlite3.ProgrammingError):  # closed connections reject use
+            connection.execute("SELECT 1")

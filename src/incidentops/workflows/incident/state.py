@@ -34,6 +34,7 @@ class IncidentState(TypedDict, total=False):
     confidence: float
     proposed_actions: list[str]
     action_items: list[dict[str, Any]]
+    approved_actions: list[str]
     hypotheses: list[str]
     ai: dict[str, Any]
     ai_review: dict[str, Any]

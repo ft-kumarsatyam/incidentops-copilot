@@ -38,9 +38,26 @@ jobs:
       - name: Evals (offline rules baseline)
         run: .venv/bin/python -m evals.run_evals --provider rules
 
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
   docker:
     runs-on: ubuntu-latest
-    needs: backend
+    needs: [backend, web]
     steps:
       - uses: actions/checkout@v4
       - name: Build image

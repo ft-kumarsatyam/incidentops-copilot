@@ -30,6 +30,7 @@ def settings(tmp_path: Path) -> Settings:
         database_path=tmp_path / "incidentops.db",
         runbook_dir=ROOT / "runbooks",
         runbook_db=runbook_db,
+        static_dir=tmp_path / "no-ui",  # tests must not depend on whether the UI was built
         rate_limit_per_minute=0,
         n8n_dispatch_backoff=0,
         log_json=False,

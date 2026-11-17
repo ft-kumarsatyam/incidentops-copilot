@@ -4,7 +4,7 @@ services:
     environment:
       INCIDENTOPS_API_KEY: ${INCIDENTOPS_API_KEY:-local-development-key}
       N8N_ACTION_WEBHOOK_URL: http://n8n:5678/webhook/incidentops/actions
-      CHECKPOINT_DIR: /app/.checkpoints
+      DATABASE_PATH: /app/.data/incidentops.db
       RUNBOOK_DIR: /app/runbooks
       RUNBOOK_DB: /app/.data/runbooks.db
       AUTO_INDEX_RUNBOOKS: "true"
@@ -12,14 +12,20 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - incidentops-checkpoints:/app/.checkpoints
       - incidentops-data:/app/.data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   n8n:
     image: ${N8N_IMAGE:-n8nio/n8n:latest}
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     environment:
       INCIDENTOPS_URL: http://api:8000
       INCIDENTOPS_API_KEY: ${INCIDENTOPS_API_KEY:-local-development-key}
@@ -37,6 +43,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  incidentops-checkpoints:
   incidentops-data:
   n8n-data:

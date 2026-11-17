@@ -22,8 +22,8 @@ pytest
 ## Adding a new workflow
 
 1. Add ADR or section in `docs/ARCHITECTURE.md` describing agents and edges.
-2. Implement under `src/workflow_automation/workflows/<name>/`.
-3. Register CLI in `workflow_automation.cli`.
+2. Implement under `src/incidentops/workflows/<name>/`.
+3. Register CLI in `incidentops.cli`.
 4. Add tests: at least one **golden trajectory** and one **failure → escalate** case.
 5. Update README demo table and resume bullets template in `docs/RESUME_AND_PORTFOLIO.md`.
 

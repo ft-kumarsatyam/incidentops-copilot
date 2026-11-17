@@ -1,0 +1,37 @@
+"""Runtime configuration, loaded from environment variables and an optional .env file."""
+
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Deployment
+    incidentops_env: Literal["dev", "prod"] = "prod"
+    log_level: str = "INFO"
+    log_json: bool = True
+    cors_origins: list[str] = Field(default_factory=list)
+    max_body_bytes: int = 256_000
+    rate_limit_per_minute: int = 120
+
+    # Auth and integrations
+    incidentops_api_key: str | None = None
+    github_token: str | None = None
+    n8n_action_webhook_url: str | None = None
+    n8n_dispatch_attempts: int = 3
+    n8n_dispatch_backoff: float = 0.5
+
+    # Storage
+    database_path: Path = Path(".data/incidentops.db")
+    runbook_dir: Path = Path("runbooks")
+    runbook_db: Path = Path(".data/runbooks.db")
+    max_runbook_results: int = 3
+    auto_index_runbooks: bool = False
+
+    # Workflow behaviour
+    max_research_attempts: int = 2
+    confidence_threshold: float = 0.8

@@ -1,0 +1,12 @@
+{
+  "run_id": "inc-demo-ambiguous",
+  "channel_id": "C-INCIDENTS",
+  "thread_ts": "1700000001.0001",
+  "reporter": "U-REPORTER",
+  "summary": "Something is slow",
+  "service": "",
+  "owner": "",
+  "symptoms": [],
+  "monitoring": {},
+  "github": {}
+}

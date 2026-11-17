@@ -21,7 +21,11 @@ def check(settings: Settings) -> dict[str, Any]:
         "fixture_demo": "ready",
         "api_auth": "configured" if settings.incidentops_api_key else "not configured",
         "github_read": "configured" if settings.github_token else "not configured",
+        "action_provider": settings.action_provider,
         "n8n_actions": "configured" if settings.n8n_action_webhook_url else "not configured",
+        "zapier_actions": (
+            "configured" if settings.zapier_action_webhook_url else "not configured"
+        ),
         "database": str(settings.database_path),
         "runbook_index": "present" if settings.runbook_db.is_file() else "missing",
     }

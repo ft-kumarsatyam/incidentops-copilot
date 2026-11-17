@@ -1,0 +1,17 @@
+{
+  "event": "incident.actions_approved",
+  "idempotency_key": "inc-demo-checkout",
+  "run_id": "inc-demo-checkout",
+  "status": "succeeded",
+  "severity": "SEV-1",
+  "service": "checkout-api",
+  "summary": "Checkout API is returning elevated 5xx responses",
+  "owner": "payments-oncall",
+  "approved_actions": [
+    "Create SEV-1 incident record for checkout-api"
+  ],
+  "incident": {
+    "approval": "approved",
+    "action_dispatch": "sent"
+  }
+}

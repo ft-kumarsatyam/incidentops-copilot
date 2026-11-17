@@ -148,3 +148,21 @@ should act only on `approved_actions`, never on `proposed_actions`.
 The service retries 5xx, 429 and transport errors with exponential backoff
 (`N8N_DISPATCH_ATTEMPTS`, `N8N_DISPATCH_BACKOFF`). n8n verifies the token and
 drops a repeated idempotency key, so a retry cannot create a second ticket.
+
+## The Zapier actions webhook
+
+With `ACTION_PROVIDER=zapier`, approvals are sent to a Webhooks by Zapier Catch
+Hook:
+
+```http
+POST <ZAPIER_ACTION_WEBHOOK_URL>
+Idempotency-Key: inc-123
+X-IncidentOps-Event: incident.actions_approved
+X-IncidentOps-Token: <ZAPIER_ACTION_TOKEN>
+Content-Type: application/json
+```
+
+The JSON has flat mapping fields plus the complete incident under `incident`.
+Zapier must use Storage by Zapier to claim `idempotency_key` before external
+actions. Retry behavior is controlled by `ZAPIER_DISPATCH_ATTEMPTS` and
+`ZAPIER_DISPATCH_BACKOFF`. See [`zapier/README.md`](../zapier/README.md).

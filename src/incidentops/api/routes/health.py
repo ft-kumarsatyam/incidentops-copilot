@@ -32,6 +32,13 @@ def ready(
         checks["database"] = "unavailable"
     checks["runbook_index"] = "ok" if settings.runbook_db.is_file() else "missing"
     checks["n8n_actions"] = "configured" if settings.n8n_action_webhook_url else "not_configured"
+    action_url = (
+        settings.zapier_action_webhook_url
+        if settings.action_provider == "zapier"
+        else settings.n8n_action_webhook_url
+    )
+    checks["action_provider"] = settings.action_provider
+    checks["action_webhook"] = "configured" if action_url else "not_configured"
     healthy = checks["database"] == "ok" and checks["runbook_index"] == "ok"
     if not healthy:
         response.status_code = 503

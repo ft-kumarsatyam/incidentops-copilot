@@ -150,8 +150,11 @@ Copy [.env.example](.env.example). The settings you will touch most:
 | `TRIAGE_MODEL` / `CRITIC_MODEL` | `claude-sonnet-5-5` / `claude-haiku-5-5` | Models per role |
 | `CONFIDENCE_THRESHOLD` | `0.8` | Below this, the run goes to a human instead of approval |
 | `MAX_RESEARCH_ATTEMPTS` | `2` | Bound on the critic-to-research loop |
+| `ACTION_PROVIDER` | `n8n` | Approved-action dispatcher: `n8n` or `zapier` |
 | `N8N_ACTION_WEBHOOK_URL` | | Where approved actions are sent |
 | `N8N_ACTION_TOKEN` | | Shared secret n8n checks on that webhook |
+| `ZAPIER_ACTION_WEBHOOK_URL` | | Webhooks by Zapier Catch Hook URL |
+| `ZAPIER_ACTION_TOKEN` | | Optional token sent as `X-IncidentOps-Token` |
 | `DATABASE_PATH` | `.data/incidentops.db` | Checkpoints, incident index, audit log |
 | `CORS_ORIGINS` | `[]` | JSON list of allowed browser origins |
 
@@ -166,6 +169,11 @@ The Slack message carries the proposal and a link to the incident page, where
 the commander reviews the evidence and approves. Duplicate Slack deliveries and
 double clicks are absorbed by idempotency keys on both sides.
 
+To execute approved actions through Zapier instead, set
+`ACTION_PROVIDER=zapier` and follow the
+[Zapier adapter guide](zapier/README.md). The same human approval, retries, and
+idempotency key apply.
+
 ## Evaluation
 
 `make eval` scores 10 labeled incidents: severity, missing-field detection,
@@ -174,6 +182,13 @@ injection case). The offline rules baseline currently passes **10 of 10** and
 runs in CI on every pull request. Full results are in
 [evals/report.md](evals/report.md). `make eval-claude` runs the same suite
 against Claude when you have a key.
+
+`make eval-architecture` runs the same cases through an experimental parallel
+impact/change/runbook specialist graph. It produced the same 10/10 quality,
+safety, and grounding scores with more roles and higher latency, so Phase 4
+**rejects a swarm and CrewAI for the current scope**. See
+[the architecture report](evals/architecture_report.md) and
+[ADR 006](docs/adr/006-reject-specialist-swarm-for-current-scope.md).
 
 ## Project structure
 

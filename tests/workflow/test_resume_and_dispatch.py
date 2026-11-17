@@ -51,6 +51,42 @@ def test_rejected_decision_cancels_without_dispatch(settings: Settings) -> None:
     assert calls == []
 
 
+def test_zapier_provider_routes_to_its_hook_and_token(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    def dispatcher(url: str, payload: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+        calls.append((url, kwargs))
+        return {"status": "success"}
+
+    configured = settings.model_copy(
+        update={
+            "action_provider": "zapier",
+            "zapier_action_webhook_url": "https://hooks.zapier.com/catch/1/abc",
+            "zapier_action_token": "zap-token",
+            "zapier_dispatch_attempts": 2,
+            "zapier_dispatch_backoff": 0.25,
+        }
+    )
+    monkeypatch.setattr("incidentops.workflows.incident.service.request_zapier_actions", dispatcher)
+    service = IncidentService(configured)
+    try:
+        payload = load_fixture("incident_complete.json")
+        service.start(payload)
+        result = service.decide(payload["run_id"], payload["run_id"], "approved")
+    finally:
+        service.close()
+
+    assert result["action_dispatch"] == "sent"
+    assert calls == [
+        (
+            configured.zapier_action_webhook_url,
+            {"attempts": 2, "backoff": 0.25, "token": "zap-token"},
+        )
+    ]
+
+
 def test_second_decision_is_a_conflict_and_does_not_redispatch(settings: Settings) -> None:
     calls: list[str] = []
     service = _service(settings, lambda *a, **k: calls.append("x") or {})

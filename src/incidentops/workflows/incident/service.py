@@ -22,7 +22,8 @@ from incidentops.core.logging import bound_context, get_logger
 from incidentops.core.redact import redact
 from incidentops.core.telemetry import span
 from incidentops.persistence.repo import IncidentRepo
-from incidentops.tools.n8n import request_actions
+from incidentops.tools.n8n import request_actions as request_n8n_actions
+from incidentops.tools.zapier import request_actions as request_zapier_actions
 from incidentops.workflows.incident.graph import build_incident_graph
 from incidentops.workflows.incident.nodes import stable_id
 
@@ -37,12 +38,17 @@ class IncidentService:
         settings: Settings,
         *,
         repo: IncidentRepo | None = None,
-        dispatcher: Dispatcher = request_actions,
+        dispatcher: Dispatcher | None = None,
         provider: TriageProvider | None = None,
     ) -> None:
         self.settings = settings
         self.repo = repo or IncidentRepo(settings.database_path)
-        self._dispatcher = dispatcher
+        if dispatcher is not None:
+            self._dispatcher = dispatcher
+        elif settings.action_provider == "zapier":
+            self._dispatcher = request_zapier_actions
+        else:
+            self._dispatcher = request_n8n_actions
         self.events = EventBus()
         self._connection = sqlite3.connect(settings.database_path, check_same_thread=False)
         self._connection.execute("PRAGMA journal_mode=WAL")
@@ -156,20 +162,33 @@ class IncidentService:
         return state
 
     def _dispatch(self, run_id: str, state: dict[str, Any], actor: str) -> dict[str, Any]:
-        url = self.settings.n8n_action_webhook_url
+        if self.settings.action_provider == "zapier":
+            url = self.settings.zapier_action_webhook_url
+            attempts = self.settings.zapier_dispatch_attempts
+            backoff = self.settings.zapier_dispatch_backoff
+            token = self.settings.zapier_action_token
+        else:
+            url = self.settings.n8n_action_webhook_url
+            attempts = self.settings.n8n_dispatch_attempts
+            backoff = self.settings.n8n_dispatch_backoff
+            token = self.settings.n8n_action_token
         update: dict[str, Any]
         if not url:
             update = {"action_dispatch": "not_configured", "status": "succeeded"}
             self.repo.add_audit(run_id, "dispatch:not_configured", actor)
         else:
             try:
-                with span("n8n.dispatch", run_id=run_id):
+                with span(
+                    "action.dispatch",
+                    run_id=run_id,
+                    provider=self.settings.action_provider,
+                ):
                     self._dispatcher(
                         url,
                         dict(state),
-                        attempts=self.settings.n8n_dispatch_attempts,
-                        backoff=self.settings.n8n_dispatch_backoff,
-                        token=self.settings.n8n_action_token,
+                        attempts=attempts,
+                        backoff=backoff,
+                        token=token,
                     )
             except (httpx.HTTPError, ValueError) as error:
                 log.error("incident.dispatch_failed", error=str(error))

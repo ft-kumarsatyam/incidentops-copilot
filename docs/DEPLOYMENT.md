@@ -28,6 +28,8 @@ People paste the key into **Settings** in the UI. It stays in that browser's ses
 |---|---|---|
 | `INCIDENTOPS_API_KEY` | API, n8n, the browser | Rotate with the others when staff change |
 | `N8N_ACTION_TOKEN` | API and n8n | Must match on both sides |
+| `ZAPIER_ACTION_WEBHOOK_URL` | API | Treat the Catch Hook URL as a credential |
+| `ZAPIER_ACTION_TOKEN` | API and Zap | Optional additional shared token |
 | `ANTHROPIC_API_KEY` | API | Optional. Without it the rules engine runs |
 | `GITHUB_TOKEN` | n8n (issue write), API (read, optional) | Use a fine-grained token on one repository |
 | `SLACK_BOT_TOKEN` | n8n | The API never sees it |
@@ -49,14 +51,17 @@ docker compose up --build
 - The container runs as a non-root user.
 - Runbooks are indexed at startup (`AUTO_INDEX_RUNBOOKS=true`).
 
+For Zapier instead of n8n, set `ACTION_PROVIDER=zapier` and
+`ZAPIER_ACTION_WEBHOOK_URL`; see [`zapier/README.md`](../zapier/README.md).
+
 Put a TLS-terminating reverse proxy in front of both services. For the live
 stream, do not buffer responses on `/incidents/stream`.
 
 ## Health and readiness
 
 - `GET /health`: the process is up. Use it for liveness.
-- `GET /ready`: database reachable and runbook index present, with `n8n_actions`
-  reported as `configured` or `not_configured`. Returns `503` if not ready. Use it
+- `GET /ready`: database reachable and runbook index present, with the selected
+  `action_provider` and `action_webhook` status. Returns `503` if not ready. Use it
   for load balancer checks.
 
 ## Logging and tracing

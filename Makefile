@@ -2,7 +2,7 @@
 PY ?= .venv/bin/python
 BIN := .venv/bin
 
-.PHONY: help setup index dev serve demo test cov eval eval-claude lint format typecheck check web-install web-dev web-build web-test up down clean
+.PHONY: help setup index dev serve demo test cov eval eval-claude eval-architecture lint format typecheck check web-install web-dev web-build web-test up down clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-11s\033[0m %s\n", $$1, $$2}'
@@ -50,6 +50,9 @@ eval: ## Score the labeled incidents with the offline rules provider (free)
 
 eval-claude: ## Compare rules vs Claude on the labeled incidents (needs ANTHROPIC_API_KEY; costs money)
 	$(PY) -m evals.run_evals --provider both
+
+eval-architecture: ## Test whether parallel specialist agents beat the current graph
+	$(PY) -m evals.compare_architectures
 
 lint: ## Lint and check formatting
 	$(BIN)/ruff check .

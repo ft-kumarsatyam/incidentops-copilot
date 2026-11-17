@@ -85,17 +85,30 @@ boolean, plus groundedness of every action.
 ```bash
 make eval          # rules baseline: free, offline, runs in CI on every PR
 make eval-claude   # rules vs Claude: needs ANTHROPIC_API_KEY and spends tokens
+make eval-architecture  # current graph vs parallel specialist subgraph
 ```
 
 Results go to `evals/report.md`. The first eval run exposed a real retrieval bug (a runbook
 named for a service was not found because its title was not indexed), which is the point
 of keeping the dataset in the repo: add a case whenever you find a failure.
 
+### Multi-agent architecture gate
+
+`agents/specialists.py` is an experimental nested LangGraph that fans out to
+impact, change, and runbook specialists before synthesis. It uses the same
+rules and guardrails as the current graph so the benchmark isolates topology.
+
+The result is recorded in
+[`evals/architecture_report.md`](../evals/architecture_report.md): both
+architectures passed 10/10 cases with 100% safety and grounding, while the
+specialist topology added roles and latency. We therefore reject a swarm and
+CrewAI for the current scope. See [ADR 006](adr/006-reject-specialist-swarm-for-current-scope.md).
+
 ## Observability
 
 - `ai.call` log line per model call: role, model, input and output tokens, latency.
 - `ai.fallback` warning with the reason whenever the rules provider takes over.
-- OpenTelemetry spans (`ai.triage`, `ai.critic`, `incident.run`, `n8n.dispatch`) when
+- OpenTelemetry spans (`ai.triage`, `ai.critic`, `incident.run`, `action.dispatch`) when
   `OTEL_EXPORTER_OTLP_ENDPOINT` is set and the `otel` extra is installed.
 - Every log line carries `request_id` and `run_id`.
 

@@ -22,10 +22,15 @@ class Settings(BaseSettings):
     # Auth and integrations
     incidentops_api_key: str | None = None
     github_token: str | None = None
+    action_provider: Literal["n8n", "zapier"] = "n8n"
     n8n_action_webhook_url: str | None = None
     n8n_action_token: str | None = None  # shared secret n8n checks on the actions webhook
     n8n_dispatch_attempts: int = 3
     n8n_dispatch_backoff: float = 0.5
+    zapier_action_webhook_url: str | None = None
+    zapier_action_token: str | None = None
+    zapier_dispatch_attempts: int = 3
+    zapier_dispatch_backoff: float = 0.5
 
     # Storage
     database_path: Path = Path(".data/incidentops.db")

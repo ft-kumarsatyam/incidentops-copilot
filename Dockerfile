@@ -6,9 +6,10 @@ COPY src ./src
 COPY runbooks ./runbooks
 RUN pip install --no-cache-dir .
 
-RUN useradd --create-home appuser && mkdir -p /app/.checkpoints \
-    && chown -R appuser:appuser /app
+RUN useradd --create-home appuser && mkdir -p /app/.data && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000
-CMD ["uvicorn", "workflow_automation.api:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \
+  CMD python -c "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=3)"
+CMD ["uvicorn", "incidentops.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

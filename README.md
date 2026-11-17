@@ -76,7 +76,7 @@ workflow-run incident \
 Start the API and open [http://localhost:8000](http://localhost:8000):
 
 ```bash
-uvicorn workflow_automation.api:app --reload
+uvicorn incidentops.api:app --reload
 ```
 
 The dashboard reads the same checkpoints as Slack/n8n. It shows severity,
@@ -160,7 +160,7 @@ pytest
 Project layout:
 
 ```text
-src/workflow_automation/       Python package and CLI
+src/incidentops/       Python package and CLI
   tools/                       Monitoring and n8n boundaries
   workflows/incident/          State, graph, and node implementations
 tests/                         Graph, contract, and metric tests

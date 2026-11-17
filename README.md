@@ -1,5 +1,9 @@
 # IncidentOps Copilot
 
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-1C3C3C)](https://langchain-ai.github.io/langgraph/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A Slack-native incident coordinator built with Python, LangGraph, and n8n. It
 turns an incomplete incident report into evidence, severity, ownership, and
 proposed actions—then requires human approval before anything changes.
@@ -33,7 +37,7 @@ idempotency, durable checkpoints, and human escalation.
 ### Install
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/ft-kumarsatyam/incidentops-copilot.git
 cd incidentops-copilot
 python -m venv .venv
 source .venv/bin/activate

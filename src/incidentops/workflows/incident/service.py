@@ -15,6 +15,7 @@ from langgraph.types import Command
 
 from incidentops.agents.factory import build_provider
 from incidentops.agents.resilient import TriageProvider
+from incidentops.api.events import EventBus
 from incidentops.core.config import Settings
 from incidentops.core.errors import IncidentConflictError, IncidentNotFoundError
 from incidentops.core.logging import bound_context, get_logger
@@ -42,6 +43,7 @@ class IncidentService:
         self.settings = settings
         self.repo = repo or IncidentRepo(settings.database_path)
         self._dispatcher = dispatcher
+        self.events = EventBus()
         self._connection = sqlite3.connect(settings.database_path, check_same_thread=False)
         self._connection.execute("PRAGMA journal_mode=WAL")
         self._graph = build_incident_graph(
@@ -92,23 +94,41 @@ class IncidentService:
         return state
 
     def decide(
-        self, run_id: str, idempotency_key: str, decision: str, *, actor: str = "api"
+        self,
+        run_id: str,
+        idempotency_key: str,
+        decision: str,
+        *,
+        approved_actions: list[str] | None = None,
+        actor: str = "api",
     ) -> dict[str, Any]:
+        """Approve or reject. ``approved_actions`` narrows an approval to a subset of actions."""
         state = self.get(run_id)
         if idempotency_key != state.get("idempotency_key"):
             raise IncidentConflictError("idempotency key mismatch")
+        proposed = state.get("proposed_actions", [])
+        chosen = proposed if approved_actions is None else approved_actions
+        if decision == "rejected":
+            chosen = []
+        elif not set(chosen) <= set(proposed):
+            raise IncidentConflictError("approved_actions must be a subset of proposed_actions")
+        elif not chosen:
+            raise IncidentConflictError("approve at least one action, or reject the incident")
         if not self.repo.claim(run_id, "awaiting_approval"):
             raise IncidentConflictError(
                 f"run is not awaiting approval (status: {self.get(run_id)['status']})"
             )
         with bound_context(run_id=run_id):
             try:
-                self._graph.invoke(Command(resume=decision), config=self._config(run_id))
+                self._graph.invoke(
+                    Command(resume={"decision": decision, "approved_actions": chosen}),
+                    config=self._config(run_id),
+                )
             except Exception:
                 self.repo.release(run_id, "awaiting_approval")
                 raise
             state = self._sync(run_id)
-            self.repo.add_audit(run_id, f"decision:{decision}", actor)
+            self.repo.add_audit(run_id, f"decision:{decision}", actor, {"approved_actions": chosen})
             log.info("incident.decided", decision=decision)
             if decision == "approved":
                 state = self._dispatch(run_id, state, actor)
@@ -131,7 +151,9 @@ class IncidentService:
     def _sync(self, run_id: str) -> dict[str, Any]:
         values = dict(self._graph.get_state(self._config(run_id)).values)
         self.repo.upsert(values)
-        return self.get(run_id)
+        state = self.get(run_id)
+        self.events.publish({"type": "incident", "run_id": run_id, "status": state.get("status")})
+        return state
 
     def _dispatch(self, run_id: str, state: dict[str, Any], actor: str) -> dict[str, Any]:
         url = self.settings.n8n_action_webhook_url

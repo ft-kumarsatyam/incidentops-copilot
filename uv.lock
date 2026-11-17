@@ -601,7 +601,7 @@ wheels = [
 
 [[package]]
 name = "incidentops-copilot"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -617,6 +617,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "anthropic" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -635,6 +636,7 @@ otel = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", marker = "extra == 'dev'", specifier = ">=0.40" },
     { name = "anthropic", marker = "extra == 'llm'", specifier = ">=0.40" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27.0" },

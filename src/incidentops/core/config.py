@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     log_json: bool = True
     cors_origins: list[str] = Field(default_factory=list)
     max_body_bytes: int = 256_000
+    static_dir: Path | None = None  # built web UI; defaults to the packaged ./static
     rate_limit_per_minute: int = 120
 
     # Auth and integrations

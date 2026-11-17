@@ -25,6 +25,7 @@ class IncidentState(TypedDict, total=False):
     monitoring: dict[str, Any]
     github: dict[str, Any]
     evidence: list[dict[str, Any]]
+    runbook_hits: list[dict[str, Any]]
     missing_fields: list[str]
     severity: str
     confidence: float

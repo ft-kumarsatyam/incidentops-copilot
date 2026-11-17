@@ -13,7 +13,7 @@ from workflow_automation.workflows.incident.nodes import (
     critic,
     intake,
     make_finalize,
-    research,
+    make_research,
     route_after_critic,
 )
 from workflow_automation.workflows.incident.state import IncidentState
@@ -23,7 +23,8 @@ def build_incident_graph(settings: Settings | None = None) -> Any:
     settings = settings or Settings()
     graph = StateGraph(IncidentState)
     graph.add_node("intake", intake)
-    graph.add_node("research", research)
+    research_node = make_research(settings.runbook_db, settings.max_runbook_results)
+    graph.add_node("research", research_node)  # type: ignore[arg-type]
     graph.add_node("assess", assess)
     graph.add_node("critic", critic)
     # LangGraph's generic inference loses the TypedDict type for closure-built nodes.

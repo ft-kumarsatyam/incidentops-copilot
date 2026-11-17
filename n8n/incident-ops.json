@@ -27,6 +27,15 @@
       "parameters": {
         "method": "POST",
         "url": "={{$env.INCIDENTOPS_URL + '/incidents'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{$env.INCIDENTOPS_API_KEY}}"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{$json}}",
@@ -53,7 +62,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {channel:$json.channel_id,thread_ts:$json.thread_ts,text:'IncidentOps approval required: ' + $json.severity + '\\nRun: ' + $json.run_id + '\\nActions: ' + ($json.proposed_actions || []).join('; ') + '\\nApprove/reject via ' + $env.N8N_PUBLIC_URL + '/webhook/incidentops/decision?run_id=' + $json.run_id + '&idempotency_key=' + $json.idempotency_key} }}",
+        "jsonBody": "={{ {channel:$json.channel_id,thread_ts:$json.thread_ts,text:'IncidentOps approval required: ' + $json.severity + '\\nRun: ' + $json.run_id + '\\nActions: ' + ($json.proposed_actions || []).join('; ') + '\\nApprove: ' + $env.N8N_PUBLIC_URL + '/webhook/incidentops/decision?decision=approved&run_id=' + $json.run_id + '&idempotency_key=' + $json.idempotency_key + '\\nReject: ' + $env.N8N_PUBLIC_URL + '/webhook/incidentops/decision?decision=rejected&run_id=' + $json.run_id + '&idempotency_key=' + $json.idempotency_key} }}",
         "options": {}
       },
       "id": "post-approval",
@@ -75,7 +84,7 @@
     },
     {
       "parameters": {
-        "httpMethod": "POST",
+        "httpMethod": "GET",
         "path": "incidentops/decision",
         "responseMode": "responseNode"
       },
@@ -125,6 +134,30 @@
     {
       "parameters": {
         "method": "POST",
+        "url": "={{$env.INCIDENTOPS_URL + '/incidents/' + $json.run_id + '/decision'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{$env.INCIDENTOPS_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {idempotency_key:$json.idempotency_key,decision:$json.decision} }}",
+        "options": {}
+      },
+      "id": "resume-graph",
+      "name": "Resume LangGraph",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
         "url": "={{'https://api.github.com/repos/' + $env.GITHUB_REPO + '/issues'}}",
         "sendHeaders": true,
         "headerParameters": {
@@ -152,7 +185,7 @@
       "name": "Create GitHub Incident",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [660, 240]
+      "position": [880, 240]
     },
     {
       "parameters": {
@@ -163,7 +196,56 @@
       "name": "Return Decision",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
-      "position": [880, 300]
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "incidentops/actions",
+        "responseMode": "responseNode"
+      },
+      "id": "action-dispatch",
+      "name": "Approved Action Dispatch",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [440, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body ?? $json; const key = 'action:' + String(b.idempotency_key ?? ''); if (key === 'action:') throw new Error('idempotency_key required'); const seen = $getWorkflowStaticData('global'); const duplicate = Boolean(seen[key]); if (!duplicate) seen[key] = {run_id:b.run_id, at:new Date().toISOString()}; return [{json:{...b,duplicate,execute:!duplicate}}];"
+      },
+      "id": "action-idempotency",
+      "name": "Action Idempotency Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 520]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.execute}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "action-new",
+      "name": "New Approved Action?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [880, 520]
     }
   ],
   "connections": {
@@ -186,6 +268,21 @@
       "main": [[{"node": "Approved and New?", "type": "main", "index": 0}]]
     },
     "Approved and New?": {
+      "main": [
+        [{"node": "Resume LangGraph", "type": "main", "index": 0}],
+        [{"node": "Return Decision", "type": "main", "index": 0}]
+      ]
+    },
+    "Resume LangGraph": {
+      "main": [[{"node": "Return Decision", "type": "main", "index": 0}]]
+    },
+    "Approved Action Dispatch": {
+      "main": [[{"node": "Action Idempotency Gate", "type": "main", "index": 0}]]
+    },
+    "Action Idempotency Gate": {
+      "main": [[{"node": "New Approved Action?", "type": "main", "index": 0}]]
+    },
+    "New Approved Action?": {
       "main": [
         [{"node": "Create GitHub Incident", "type": "main", "index": 0}],
         [{"node": "Return Decision", "type": "main", "index": 0}]

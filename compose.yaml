@@ -1,0 +1,42 @@
+services:
+  api:
+    build: .
+    environment:
+      INCIDENTOPS_API_KEY: ${INCIDENTOPS_API_KEY:-local-development-key}
+      N8N_ACTION_WEBHOOK_URL: http://n8n:5678/webhook/incidentops/actions
+      CHECKPOINT_DIR: /app/.checkpoints
+      RUNBOOK_DIR: /app/runbooks
+      RUNBOOK_DB: /app/.data/runbooks.db
+      AUTO_INDEX_RUNBOOKS: "true"
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - incidentops-checkpoints:/app/.checkpoints
+      - incidentops-data:/app/.data
+    restart: unless-stopped
+
+  n8n:
+    image: ${N8N_IMAGE:-n8nio/n8n:latest}
+    depends_on:
+      - api
+    environment:
+      INCIDENTOPS_URL: http://api:8000
+      INCIDENTOPS_API_KEY: ${INCIDENTOPS_API_KEY:-local-development-key}
+      N8N_PUBLIC_URL: ${N8N_PUBLIC_URL:-http://localhost:5678}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-this-before-sharing}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_REPO: ${GITHUB_REPO:-}
+      N8N_SECURE_COOKIE: "false"
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n-data:/home/node/.n8n
+      - ./n8n:/workflows:ro
+    restart: unless-stopped
+
+volumes:
+  incidentops-checkpoints:
+  incidentops-data:
+  n8n-data:

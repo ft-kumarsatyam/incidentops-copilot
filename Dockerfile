@@ -10,7 +10,7 @@ COPY web/ ./
 RUN npm run build
 
 # ---- Stage 2: the API, serving the built UI -----------------------------------------------
-FROM python:3.12-slim
+FROM python:3.15-slim
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src

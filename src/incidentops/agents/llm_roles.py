@@ -42,8 +42,10 @@ class RunbookPartial(BaseModel):
 
 
 def _prompt(name: str) -> str:
-    return resources.files("incidentops.agents.prompts").joinpath("specialists", name).read_text(
-        "utf-8"
+    return (
+        resources.files("incidentops.agents.prompts")
+        .joinpath("specialists", name)
+        .read_text("utf-8")
     )
 
 
@@ -68,9 +70,7 @@ class SpecialistCaller:
             "runbook": _prompt("runbook.md"),
         }
 
-    def call(
-        self, role: str, context: TriageContext, schema: type[M]
-    ) -> AIResult[PartialOutcome]:
+    def call(self, role: str, context: TriageContext, schema: type[M]) -> AIResult[PartialOutcome]:
         model = self._settings.specialist_model or self._settings.triage_model
         try:
             response = self._client.messages.parse(

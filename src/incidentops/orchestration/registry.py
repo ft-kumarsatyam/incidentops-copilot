@@ -92,9 +92,7 @@ def register_default_topologies(settings: Settings) -> None:
             return ClaudeProvider(settings).triage(context)
         return RulesProvider().triage(context)
 
-    def monolithic_review(
-        context: TriageContext, triage: Triage
-    ) -> AIResult[CriticVerdict]:
+    def monolithic_review(context: TriageContext, triage: Triage) -> AIResult[CriticVerdict]:
         if use_claude:
             from incidentops.agents.claude import ClaudeProvider
 
@@ -110,16 +108,12 @@ def register_default_topologies(settings: Settings) -> None:
         )
     )
 
-    specialist_provider = SpecialistCognitionProvider(
-        settings, use_llm=use_llm_specialists
-    )
+    specialist_provider = SpecialistCognitionProvider(settings, use_llm=use_llm_specialists)
 
     def specialist_triage(context: TriageContext) -> AIResult[Triage]:
         return specialist_provider.triage(context)
 
-    def specialist_review(
-        context: TriageContext, triage: Triage
-    ) -> AIResult[CriticVerdict]:
+    def specialist_review(context: TriageContext, triage: Triage) -> AIResult[CriticVerdict]:
         return specialist_provider.review(context, triage)
 
     TopologyRegistry.register(

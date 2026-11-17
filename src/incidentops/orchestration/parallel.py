@@ -76,7 +76,5 @@ def invoke_parallel_stage(
     topology_id: str,
 ) -> tuple[Any, ProvenanceCollector]:
     collector = ProvenanceCollector(topology=topology_id)
-    result = compiled.invoke(
-        {"context": context, "provenance": collector, "partials": {}}
-    )
+    result = compiled.invoke({"context": context, "provenance": collector, "partials": {}})
     return result["triage"], collector

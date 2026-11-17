@@ -46,9 +46,7 @@ def retrieve_evidence(
             log.warning("research.github_failed", error=type(error).__name__)
             timeline.append(f"github unavailable ({type(error).__name__})")
 
-    raw_query = " ".join(
-        [service, state.get("summary", ""), *state.get("symptoms", [])]
-    ).strip()
+    raw_query = " ".join([service, state.get("summary", ""), *state.get("symptoms", [])]).strip()
     search_query = expand_runbook_query(
         raw_query,
         service=service,

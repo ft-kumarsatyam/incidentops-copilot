@@ -1,25 +1,8 @@
 """The repo contract, run against SQLite always and Postgres when TEST_DATABASE_URL is set."""
 
-from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-
-import pytest
 
 from incidentops.persistence.base import Repo
-from incidentops.persistence.postgres import PostgresIncidentRepo, open_pool
-from incidentops.persistence.repo import IncidentRepo
-
-
-@pytest.fixture(params=["sqlite", "postgres"])
-def repo(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[Repo]:
-    if request.param == "sqlite":
-        yield IncidentRepo(tmp_path / "db.sqlite")
-        return
-    url = request.getfixturevalue("pg_url")
-    postgres = PostgresIncidentRepo(open_pool(url, max_size=8))
-    yield postgres
-    postgres.close()
 
 
 def _state(run_id: str, status: str = "awaiting_approval", **extra: str) -> dict[str, str]:
@@ -116,3 +99,45 @@ def test_audit_is_ordered_and_scoped_to_its_run(repo: Repo) -> None:
     assert entries[1]["actor"] == "carol"
     assert entries[1]["detail"] == {"approved_actions": ["one"]}
     assert repo.audit_for("none") == []
+
+
+def test_insert_new_creates_a_run_once_and_never_overwrites(repo: Repo) -> None:
+    assert repo.insert_new(_state("a", status="queued")) is True
+
+    repo.upsert(_state("a", status="running"))  # a worker moves it on
+    assert repo.insert_new(_state("a", status="queued")) is False  # a late duplicate submit
+
+    stored = repo.get("a")
+    assert stored is not None and stored["status"] == "running"  # not reset
+
+
+def test_concurrent_insert_new_has_exactly_one_winner(repo: Repo) -> None:
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(
+            pool.map(lambda _: repo.insert_new(_state("race", status="queued")), range(20))
+        )
+
+    assert results.count(True) == 1
+
+
+def test_a_visible_claim_changes_what_readers_see(repo: Repo) -> None:
+    repo.upsert({**_state("a", status="queued"), "timeline": ["x"], "note": "keep me"})
+
+    assert repo.claim("a", "queued", to="running", visible=True) is True
+
+    stored = repo.get("a")
+    assert stored is not None
+    assert stored["status"] == "running"  # readers see it, not just the status column
+    assert stored["timeline"] == ["x"] and stored["note"] == "keep me"  # the rest is untouched
+    assert repo.search(statuses=["running"])[1] == 1  # and the column agrees
+    assert repo.claim("a", "queued", to="running", visible=True) is False  # no longer queued
+
+
+def test_the_default_claim_is_a_lock_that_readers_do_not_see(repo: Repo) -> None:
+    repo.upsert(_state("a"))
+
+    assert repo.claim("a", "awaiting_approval") is True
+
+    stored = repo.get("a")
+    assert stored is not None and stored["status"] == "awaiting_approval"  # unchanged for readers
+    assert repo.search(statuses=["busy"])[1] == 1  # but excluded for other claimers

@@ -1,11 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { useSettings } from "../lib/settings";
 import type { Decision, Incident, NewIncident } from "../lib/types";
 import { useLiveState } from "./useLive";
 
 /** Poll only while the live stream is down, so the UI never silently goes stale. */
 function useFallbackInterval(): number | false {
   return useLiveState() === "live" ? false : 15_000;
+}
+
+/** Who the server thinks you are. Re-fetched when the credential changes. */
+export function useMe() {
+  const { apiKey } = useSettings();
+  return useQuery({ queryKey: ["me", apiKey], queryFn: () => api.me(), retry: false, staleTime: 60_000 });
+}
+
+/** Whether the signed-in role may do something. Optimistic until /me answers: the server
+ * enforces every permission anyway, this only decides whether to show a button. */
+export function useCan(): (permission: string) => boolean {
+  const { data } = useMe();
+  return (permission) => (data?.permissions ? data.permissions.includes(permission) : true);
 }
 
 export function useIncidents() {
@@ -47,4 +61,9 @@ export function useDecide(incident: Incident) {
 export function useRetryDispatch(runId: string) {
   const refresh = useRefresh();
   return useMutation({ mutationFn: () => api.retryDispatch(runId), onSuccess: refresh });
+}
+
+export function useRetryRun(runId: string) {
+  const refresh = useRefresh();
+  return useMutation({ mutationFn: () => api.retryRun(runId), onSuccess: refresh });
 }

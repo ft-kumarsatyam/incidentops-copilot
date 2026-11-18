@@ -8,9 +8,12 @@ interface Props {
   incident: Incident;
   busy: boolean;
   onDecide: (decision: Decision) => Promise<unknown>;
+  /** False for roles without the approve permission: they can read the proposal only. */
+  canDecide?: boolean;
 }
 
-export function ApprovalPanel({ incident, busy, onDecide }: Props) {
+export function ApprovalPanel({ incident, busy, onDecide, canDecide = true }: Props) {
+  const progress = incident.approval_progress;
   const [selected, setSelected] = useState<Set<string>>(() => new Set(incident.proposed_actions));
   const [pending, setPending] = useState<"approved" | "rejected" | null>(null);
 
@@ -41,12 +44,22 @@ export function ApprovalPanel({ incident, busy, onDecide }: Props) {
         Your decision
       </h2>
       <p className="text-muted mt-1 text-sm">
-        Untick anything you don't want done. Nothing happens until you confirm.
+        {canDecide
+          ? "Untick anything you don't want done. Nothing happens until you confirm."
+          : "These actions are waiting for someone with approval rights. Nothing happens until they decide."}
       </p>
+      {progress && (
+        <p role="status" className="bg-surface2 mt-3 rounded-lg px-3 py-2 text-sm">
+          This severity needs <strong>{progress.required} different approvers</strong>.{" "}
+          {progress.approved_by.length} of {progress.required} have approved
+          {progress.approved_by.length > 0 && ` (${progress.approved_by.join(", ")})`}. Rejecting needs only
+          one.
+        </p>
+      )}
       <div className="mt-4">
-        <ActionChecklist incident={incident} selected={selected} onToggle={toggle} disabled={busy} />
+        <ActionChecklist incident={incident} selected={selected} onToggle={toggle} disabled={busy || !canDecide} />
       </div>
-      <div className="mt-4 flex flex-wrap gap-3">
+      {canDecide && <div className="mt-4 flex flex-wrap gap-3">
         <button
           type="button"
           disabled={busy || chosen.length === 0}
@@ -65,7 +78,7 @@ export function ApprovalPanel({ incident, busy, onDecide }: Props) {
           <X className="size-4" aria-hidden />
           Reject
         </button>
-      </div>
+      </div>}
 
       <ConfirmDialog
         open={pending !== null}

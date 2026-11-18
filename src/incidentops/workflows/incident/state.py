@@ -4,12 +4,14 @@ import operator
 from typing import Annotated, Any, Literal, TypedDict
 
 RunStatus = Literal[
+    "queued",
     "running",
     "awaiting_approval",
     "needs_human",
     "succeeded",
     "failed",
     "cancelled",
+    "errored",
 ]
 
 ActionDispatch = Literal["sent", "not_configured", "failed"]

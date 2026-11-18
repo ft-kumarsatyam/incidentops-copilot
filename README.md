@@ -16,15 +16,27 @@
 </p>
 
 <p align="center">
-  <img alt="Incident evals" src="https://img.shields.io/badge/incident_evals-37%2F37-0f6b63?style=flat-square">
-  <img alt="Guardrails" src="https://img.shields.io/badge/hostile_outputs_blocked-152%2F152-0f6b63?style=flat-square">
-  <img alt="Retrieval" src="https://img.shields.io/badge/retrieval_recall-100%25-0f6b63?style=flat-square">
-  <img alt="Python tests" src="https://img.shields.io/badge/python_tests-419_passing-0f6b63?style=flat-square">
-  <img alt="UI tests" src="https://img.shields.io/badge/ui_tests-48_passing-0f6b63?style=flat-square">
+  <img alt="Incident evals" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fft-kumarsatyam%2Fincidentops-copilot%2Fmain%2Fassets%2Fbadges%2Fincident-evals.json&style=flat-square">
+  <img alt="Guardrails" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fft-kumarsatyam%2Fincidentops-copilot%2Fmain%2Fassets%2Fbadges%2Fguardrails.json&style=flat-square">
+  <img alt="Retrieval" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fft-kumarsatyam%2Fincidentops-copilot%2Fmain%2Fassets%2Fbadges%2Fretrieval.json&style=flat-square">
+  <img alt="Python tests" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fft-kumarsatyam%2Fincidentops-copilot%2Fmain%2Fassets%2Fbadges%2Ftests.json&style=flat-square">
   <img alt="Works offline" src="https://img.shields.io/badge/works-offline_with_no_API_key-d9a441?style=flat-square">
 </p>
 
-[Features](#-key-features) · [Get Started](#-get-started) · [Explore](#-explore-incidentops-copilot) · [Evaluation](#-evaluation) · [CLI](#-command-line) · [Integrations](#-integrations) · [Docs](#-documentation) · [Roadmap](#-status-and-roadmap)
+<p align="center">
+  <a href="https://codespaces.new/ft-kumarsatyam/incidentops-copilot"><img alt="Open in GitHub Codespaces" src="https://github.com/codespaces/badge.svg" height="28"></a>&nbsp;
+  <a href="https://github.com/ft-kumarsatyam/incidentops-copilot/issues"><img alt="Issues" src="https://img.shields.io/github/issues/ft-kumarsatyam/incidentops-copilot?style=flat-square&logo=github"></a>
+  <a href="https://github.com/ft-kumarsatyam/incidentops-copilot/pkgs/container/incidentops-copilot"><img alt="Container image" src="https://img.shields.io/badge/ghcr.io-container_image-2496ED?style=flat-square&logo=docker&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <a href="README.md"><img alt="English" height="32" src="https://img.shields.io/badge/English-BCDCF7"></a>&nbsp;
+  <a href="docs/i18n/README.zh-CN.md"><img alt="简体中文" height="32" src="https://img.shields.io/badge/简体中文-CDCFD4"></a>&nbsp;
+  <a href="docs/i18n/README.hi.md"><img alt="हिन्दी" height="32" src="https://img.shields.io/badge/हिन्दी-CDCFD4"></a>&nbsp;
+  <a href="docs/i18n/README.es.md"><img alt="Español" height="32" src="https://img.shields.io/badge/Español-CDCFD4"></a>
+</p>
+
+[Features](#-key-features) · [Get Started](#-get-started) · [Explore](#-explore-incidentops-copilot) · [Evaluation](#-evaluation) · [Observe](#observability) · [CLI](#-command-line) · [Integrations](#-integrations) · [Docs](#-documentation) · [Roadmap](#-status-and-roadmap)
 
 </div>
 
@@ -47,6 +59,8 @@
 - 🛡️ **[Unreleased]** Layered guardrails: output content policy, per-type evidence rules, input injection scanner, critic-output validation. Scored by a new `make eval-guardrails` suite (152 hostile outputs, 29 benign).
 - 🗄️ **[Unreleased]** Optional **Postgres** backend and **Redis** for events and rate limits, so several API replicas share state. SQLite stays the default. Versioned migrations with an advisory lock.
 - 🔏 **[Unreleased]** Opt-in **webhook security**: HMAC-SHA256 signing with replay protection for n8n and Zapier dispatch, a signature check on `POST /incidents`, and an outbound host allowlist.
+- 🔐 **[Unreleased]** n8n workflow: opt-in **Slack signature verification** and a **Redis idempotency claim** (`SET NX` lease) shared by several n8n instances, proven by `make e2e-n8n` against two real n8n containers. Also fixes webhook URLs for CLI/API imports.
+- 📈 **[Unreleased]** Opt-in **Prometheus `/metrics`** (bearer-token protected, fail-closed outside dev) and a `docker compose --profile observability` stack with a provisioned Grafana dashboard and alert rules. See [Observability](#observability).
 - 🧠 **RoleGraph**: opt-in parallel specialists (impact, change, runbook) on LangGraph, measured against the single-agent baseline. The honest result is [recorded in the report](evals/architecture_report.md).
 - 🔎 **Runbook RAG** as its own package: FTS5 plus deterministic query rewrite, with optional hybrid embeddings.
 
@@ -107,17 +121,38 @@ to the API).
 </details>
 
 <details>
+<summary><b>☁️ GitHub Codespaces, nothing to install</b></summary>
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ft-kumarsatyam/incidentops-copilot)
+
+The [dev container](.devcontainer/devcontainer.json) installs Python 3.12 and Node 22, runs
+`make setup && make web-build`, and forwards port 8000. When it finishes, run `make dev` and
+open the forwarded port.
+
+</details>
+
+<details>
 <summary><b>🐳 Docker, API + UI + n8n</b></summary>
 
 ```bash
 docker compose up --build
 ```
 
-Optional profiles add shared state for a multi-replica setup:
+Optional profiles add shared state and monitoring:
 
 ```bash
-docker compose --profile postgres --profile redis up --build
+docker compose --profile postgres --profile redis up --build   # shared state for replicas
+docker compose --profile observability up --build              # Prometheus :9090, Grafana :3000
 ```
+
+Each `vX.Y.Z` git tag publishes a prebuilt image through [release.yml](.github/workflows/release.yml):
+
+```bash
+docker run --rm -p 8000:8000 -e INCIDENTOPS_API_KEY=change-me \
+  -v incidentops-data:/app/.data ghcr.io/ft-kumarsatyam/incidentops-copilot:latest
+```
+
+The image appears after the first tag is pushed. Until then, build it with `docker compose up --build`.
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for environments, secrets, scaling
 and backups.
@@ -182,6 +217,7 @@ coverage, the evals and the web tests, which is exactly what CI runs.
 | **Protect** | Guardrails | Fenced input, redaction, closed action list, content policy, evidence rules, confidence ceiling |
 | **Act** | Dispatch | Approved-only actions through n8n or Zapier: GitHub issue, Slack thread, status email |
 | **Operate** | Platform | SQLite or Postgres, optional Redis, SSE, rate limiting, signed webhooks, JSON logs, OpenTelemetry, health and readiness |
+| **Observe** | Metrics | Prometheus `/metrics`, a provisioned Grafana dashboard, alert rules, a multi-replica reference topology |
 
 <details>
 <summary><b>🖥️ Review: the approval page</b></summary>
@@ -306,10 +342,53 @@ Full matrix: [docs/GUARDRAILS.md](docs/GUARDRAILS.md). Threat model:
 - **Atomic claim.** Approve and reject use a single atomic update, so two replicas cannot both decide.
 - **Retries.** n8n dispatch retries with backoff; failed runs get a **Retry** button.
 - **Scale out.** Postgres and Redis share the read model, live events and rate limits across replicas. Redis falls back to in-process behavior if unreachable, and `/ready` reports it.
+- **Identity and governance.** SSO or scoped keys, four roles (viewer, responder, approver, admin), tenant isolation, optional four-eyes approval for SEV-1, and a hash-chained audit log you can verify and export.
+- **Async execution.** `EXECUTION_MODE=async` answers `202` and runs analysis on workers with leases, retries and a dead-letter state; a killed worker's run resumes from its checkpoint.
 - **Migrations.** Versioned `schema_migrations` on both backends, guarded by a Postgres advisory lock.
-- **Observability.** JSON logs with request and run IDs, optional OpenTelemetry, `/health` and `/ready`.
+- **Observability.** JSON logs with request and run IDs, optional OpenTelemetry traces, Prometheus metrics, `/health` and `/ready`.
 - **Hardening.** Fail-closed auth outside dev, CORS allowlist, body cap, per-client rate limit, optional HMAC-signed webhooks and an outbound host allowlist.
 - **Audit.** Append-only log of what was proposed, who approved what, and when.
+
+</details>
+
+<a id="observability"></a>
+
+<details>
+<summary><b>📈 Observe: metrics, dashboard and alerts</b></summary>
+
+<div align="center">
+<img src="docs/images/grafana-dashboard.png" alt="Grafana dashboard: request rate and p95 latency by route, incidents by outcome, human decisions, dispatch results, replicas scraped" width="900">
+</div>
+
+Turn it on with `METRICS_ENABLED=true` (needs the `metrics` extra; the Docker image has it). Outside
+dev the API **refuses to start** without `METRICS_TOKEN`, and `/metrics` then needs
+`Authorization: Bearer <token>`, so metrics are never published open by accident.
+
+| Metric | Labels | Answers |
+|---|---|---|
+| `incidentops_http_requests_total` | method, route, status | Traffic and error rate. Routes are templates (`/incidents/{run_id}`), never raw paths |
+| `incidentops_http_request_duration_seconds` | method, route | p95 latency per route |
+| `incidentops_incidents_total` | status, severity | How many runs end `awaiting_approval` vs `needs_human` |
+| `incidentops_decisions_total` | decision | Approve and reject volume |
+| `incidentops_dispatch_total` | result | `sent`, `failed` or `not_configured`: are approved actions reaching n8n? |
+| `incidentops_rate_limited_total` | | How often clients hit the limiter |
+| `incidentops_build_info` | version | Which build each replica runs |
+
+```bash
+docker compose --profile observability up --build
+# Grafana http://localhost:3000 (admin / admin, change it), Prometheus http://localhost:9090
+```
+
+Alert rules in [monitoring/alerts.yml](monitoring/alerts.yml): a replica is down, more than 5% of
+responses are 5xx, an approved dispatch failed, and p95 latency above 2 seconds. Prometheus reads
+the scrape token from a file written at container start, so it never sits in the config.
+
+**Scaling out.** The reference topology below is what `DATABASE_URL`, `REDIS_URL` and the
+observability profile give you together. Details in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+<div align="center">
+<img src="assets/deployment-topology.svg" alt="Load balancer in front of several stateless API replicas sharing Postgres and Redis, with Prometheus and Grafana scraping every replica" width="900">
+</div>
 
 </details>
 
@@ -366,16 +445,18 @@ is a demo-only claim.
 | Incidents | `make eval` | **37 of 37** pass: 10 core cases plus 27 edge cases covering severity, missing facts, conflicts, runbook choice, grounding, safety and prompt injection ([report](evals/report.md)) |
 | Guardrails | `make eval-guardrails` | **152 of 152** hostile outputs blocked, **29 of 29** benign outputs kept, 19 of 19 property checks ([report](evals/guardrail_report.md)) |
 | Retrieval | `make eval-retrieval` | Recall@k: raw FTS 81.8%, with query rewrite **100%**, hybrid 100% ([report](evals/retrieval_report.md)) |
+| Load | `make loadtest` | p95 per replica count, with errors, Postgres CPU and what the database waited on: 1 → 4 replicas gave about ×1.2 on a 2-CPU Postgres, limited by commit flushes and the audit-chain lock ([report](evals/loadtest_report.md)) |
 | Architecture | `make eval-architecture` | Single-agent graph vs parallel specialists ([report](evals/architecture_report.md)) |
 
 `make eval-claude` runs the incident suite against Claude when you have a key
 ([report](evals/report-claude.md)).
 
-**Code quality.** 447 Python tests: 419 run locally, and 28 Postgres and Redis
-integration tests run against real service containers in CI. Coverage is 85.6%
-with a gate at 85%, plus 48 UI tests, strict mypy and ruff. The same contract
-tests run on SQLite and Postgres. Mutation tests prove the evals fail when a
-guardrail is removed.
+**Code quality.** The test count and eval numbers in the badges above are generated by
+[scripts/update_badges.py](scripts/update_badges.py) from the reports and the test collection, and CI fails a
+pull request whose badges are stale, so they cannot drift. Tests run against real Postgres and
+Redis containers in CI, where `TESTS_STRICT=1` turns a skipped service test into a failure. The same
+contract tests run on SQLite and Postgres. Coverage has a gate at 85%, with strict mypy and ruff and
+the web UI's own test suite. Mutation tests prove the evals fail when a guardrail is removed.
 
 **Specialists vs the baseline.** More agents did not earn their place here:
 
@@ -466,6 +547,7 @@ Copy [.env.example](.env.example). The settings you will touch most:
 | `ROLEGRAPH_MAX_PARALLEL` | `4` | Today this caps how many `MCP_SERVERS` are attached per run |
 | `MCP_ENABLED` / `MCP_SERVERS` | `false` / `[]` | Optional read-only MCP hook (client still a placeholder) |
 | `RUNBOOK_RETRIEVAL` | `fts` | `fts` or `hybrid` (hybrid needs the `[rag]` extra and a reindex) |
+| `RUNBOOK_STORE` | `sqlite` | `postgres` keeps one shared runbook index in `DATABASE_URL` (full-text search; with `hybrid`, pgvector). Needs a Postgres with the pgvector extension for hybrid |
 | `CONFIDENCE_THRESHOLD` | `0.8` | Below this, the run goes to a human instead of approval |
 | `MAX_RESEARCH_ATTEMPTS` | `2` | Bound on the critic-to-research loop |
 | `ACTION_PROVIDER` | `n8n` | Approved-action dispatcher: `n8n` or `zapier` |
@@ -474,7 +556,17 @@ Copy [.env.example](.env.example). The settings you will touch most:
 | `DATABASE_PATH` | `.data/incidentops.db` | SQLite checkpoints, incident index, audit log |
 | `DATABASE_URL` | | Use Postgres instead of SQLite (needs the `postgres` extra) |
 | `REDIS_URL` | | Shared live events and rate limits across replicas (needs the `redis` extra) |
+| `EXECUTION_MODE` | `sync` | `async` answers `202` and runs analysis on workers (queue, retries, dead letters) |
+| `WORKER_CONCURRENCY` | `2` | In-process workers on the API (`0` = use `incidentops worker` processes) |
+| `JOB_LEASE_SECONDS` / `JOB_MAX_ATTEMPTS` | `60` / `3` | Worker lease and attempts before a run is `errored` |
+| `RUN_TIMEOUT_SECONDS` | `300` | Upper bound for one analysis attempt |
+| `OIDC_ISSUER` / `OIDC_AUDIENCE` | | Accept SSO access tokens from your identity provider (needs the `oidc` extra) |
+| `FOUR_EYES_APPROVALS` | `1` | Distinct named approvers required for `FOUR_EYES_SEVERITIES` (default SEV-1) |
+| `FORBID_SELF_APPROVAL` | `false` | Whoever opened an incident cannot approve it |
+| `DEFAULT_TENANT` | `default` | Tenant for the shared key and for tokens without a tenant claim |
 | `RATE_LIMIT_PER_MINUTE` | `120` | Per-client request limit |
+| `METRICS_ENABLED` | `false` | Expose Prometheus metrics at `/metrics` (needs the `metrics` extra) |
+| `METRICS_TOKEN` | | Bearer token for `/metrics`. Required unless `INCIDENTOPS_ENV=dev` |
 | `CORS_ORIGINS` | `[]` | JSON list of allowed browser origins |
 
 `NOTIFY_EMAIL_TO` and `NOTIFY_FROM_EMAIL` are read by n8n, not by the Python
@@ -495,11 +587,13 @@ src/incidentops/
 web/              React + Vite + TypeScript UI (builds into the package)
 evals/            Incident, guardrail, retrieval and architecture benchmarks
 n8n/              Importable workflow and its setup notes
+monitoring/       Prometheus config, alert rules, provisioned Grafana dashboard
+.devcontainer/    GitHub Codespaces and VS Code dev container
 zapier/           Alternative action dispatcher and example payload
 runbooks/         Markdown corpus indexed by rag/
 tests/            Unit, workflow, API, agent, orchestration and contract tests
 docs/             Architecture, AI system design, RAG, integrations, ADRs
-assets/           Logo and architecture diagram
+assets/           Logo, diagrams, and generated badge data (assets/badges/)
 ```
 
 Full map: [docs/REPOSITORY_MAP.md](docs/REPOSITORY_MAP.md).
@@ -524,6 +618,7 @@ Full map: [docs/REPOSITORY_MAP.md](docs/REPOSITORY_MAP.md).
 | [Portfolio guide](docs/PORTFOLIO.md) | Demo script, talking points, evidence tables |
 | [Repository map](docs/REPOSITORY_MAP.md) | Where every package and eval suite lives |
 | [Security](SECURITY.md) | Threat model and reporting |
+| [Translations](docs/i18n) | Condensed README in 简体中文, हिन्दी and Español. English is authoritative |
 | [Demo script](docs/DEMO_SCRIPT.md) | A 90-second demo |
 | [Contributing](CONTRIBUTING.md) | Setup, quality gates, how to extend |
 
@@ -542,20 +637,37 @@ controls.
 - [x] Runbook RAG with measured retrieval quality
 - [x] Postgres and Redis for multi-replica deployments, tested in CI
 - [x] Signed webhooks and outbound allowlist (opt-in)
+- [x] Async execution: durable queue, workers, leases, retries and dead letters (opt-in)
+- [x] Identity and governance: SSO (OIDC), scoped keys, RBAC, tenants, four-eyes approval, hash-chained audit log
+- [x] Prometheus metrics, alert rules and a Grafana dashboard (opt-in)
+- [x] Self-updating README badges, a Codespaces dev container and a tagged-release image pipeline
 - [ ] MCP client: the hook and safety boundary exist, the client is a placeholder
 - [ ] Specialist roles with a real model scored against the baseline: run
       `AI_TOPOLOGY=specialists AI_PROVIDER=claude make eval-architecture` with a key
 - [ ] Claude comparison on the core cases: run `make eval-claude` with a key
-- [ ] Slack signature verification in the shipped n8n template (the secret is
-      workspace specific; see the [hardening checklist](n8n/README.md))
+- [x] Slack signature verification in the shipped n8n template (opt-in with `SLACK_SIGNING_SECRET`)
 - [ ] Email intake as a shipped branch (today a documented n8n template)
-- [ ] Jira action node, per-user login, richer monitoring connectors
+- [x] n8n idempotency gate on Redis `SET NX`, shared by several n8n instances ([n8n/README.md](n8n/README.md#idempotency))
+- [x] Shared runbook index in Postgres, with pgvector for hybrid retrieval (`RUNBOOK_STORE=postgres`, [ADR 007](docs/adr/007-hybrid-runbook-retrieval.md))
+- [x] Load-test result per replica count next to the evals ([report](evals/loadtest_report.md))
+- [ ] Shorten the per-tenant audit-chain critical section (the load test shows it as a shared limit)
+- [ ] Jira action node, richer monitoring connectors
 
-## 🤝 Contributing
+## 🤝 Community and contributing
 
-Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup,
-quality gates and how to extend the system. Run `make check` before opening a
-pull request. To report a vulnerability, follow [SECURITY.md](SECURITY.md).
+Questions and bug reports: [GitHub Issues](https://github.com/ft-kumarsatyam/incidentops-copilot/issues).
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, quality gates and how to
+extend the system. Run `make check` before opening a pull request. To report a vulnerability,
+follow [SECURITY.md](SECURITY.md).
+
+### Star history
+
+<a href="https://www.star-history.com/#ft-kumarsatyam/incidentops-copilot&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ft-kumarsatyam/incidentops-copilot&type=Date&theme=dark">
+    <img alt="Star history chart" src="https://api.star-history.com/svg?repos=ft-kumarsatyam/incidentops-copilot&type=Date" width="600">
+  </picture>
+</a>
 
 ## 📄 License
 

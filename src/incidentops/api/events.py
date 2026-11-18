@@ -167,8 +167,11 @@ async def event_stream(
     bus: EventBus,
     is_disconnected: Callable[[], Awaitable[bool]],
     heartbeat_seconds: float = 15.0,
+    accept: Callable[[dict[str, Any]], bool] | None = None,
 ) -> AsyncIterator[str]:
-    """Yield SSE frames until the client goes away. Heartbeats keep proxies from closing it."""
+    """Yield SSE frames until the client goes away. Heartbeats keep proxies from closing it.
+
+    ``accept`` filters events per client (a tenant must only see its own runs)."""
     async for queue in bus.subscribe():
         yield sse_frame({"type": "ready"})
         while not await is_disconnected():
@@ -177,4 +180,5 @@ async def event_stream(
             except TimeoutError:
                 yield ": keep-alive\n\n"
                 continue
-            yield sse_frame(event)
+            if accept is None or accept(event):
+                yield sse_frame(event)

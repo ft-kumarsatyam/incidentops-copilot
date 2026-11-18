@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="470" viewBox="0 0 900 470" role="img" aria-label="Multi-replica deployment with Postgres, Redis and monitoring">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5b6b69"/></marker>
+    <style>
+      text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;fill:#17201f}
+      .t{font-size:15px;font-weight:700}.s{font-size:12px;fill:#4a5856}.h{font-size:13px;font-weight:700;fill:#0f6b63;letter-spacing:1px}
+      .box{fill:#fff;stroke:#c9d2cf;stroke-width:1.2}.line{stroke:#5b6b69;stroke-width:1.6;fill:none;marker-end:url(#a)}
+      .dash{stroke:#5b6b69;stroke-width:1.4;fill:none;stroke-dasharray:5 4;marker-end:url(#a)}
+    </style>
+  </defs>
+  <rect width="900" height="470" rx="18" fill="#f6f4ef" stroke="#e1ddd2"/>
+  <text x="30" y="34" class="h">SCALING OUT · SHARED STATE AND MONITORING</text>
+
+  <!-- clients and LB -->
+  <rect x="30" y="64" width="170" height="84" rx="10" class="box"/>
+  <text x="44" y="88" class="t">Clients</text>
+  <text x="44" y="108" class="s">Browser (SSE)</text>
+  <text x="44" y="124" class="s">Slack via n8n</text>
+  <text x="44" y="140" class="s">CLI and API callers</text>
+  <path d="M200 106 H240" class="line"/>
+  <rect x="242" y="64" width="150" height="84" rx="10" fill="#e6f1ef" stroke="#9cc5bf"/>
+  <text x="256" y="88" class="t">Load balancer</text>
+  <text x="256" y="108" class="s">idle timeout above 15s</text>
+  <text x="256" y="124" class="s">response buffering off</text>
+
+  <!-- replicas -->
+  <rect x="430" y="52" width="190" height="52" rx="10" class="box"/><text x="444" y="75" class="t">API replica 1</text><text x="444" y="93" class="s">stateless · /ready · /metrics</text>
+  <rect x="430" y="114" width="190" height="52" rx="10" class="box"/><text x="444" y="137" class="t">API replica 2</text><text x="444" y="155" class="s">stateless · /ready · /metrics</text>
+  <rect x="430" y="176" width="190" height="52" rx="10" class="box" stroke-dasharray="5 4"/><text x="444" y="199" class="t">API replica N</text><text x="444" y="217" class="s">add more any time</text>
+  <path d="M392 106 H428" class="line"/>
+
+  <!-- postgres + redis -->
+  <rect x="680" y="52" width="190" height="104" rx="10" fill="#fff4e0" stroke="#e5c27a"/>
+  <text x="694" y="75" class="t">Postgres</text>
+  <text x="694" y="94" class="s">incident read model</text>
+  <text x="694" y="110" class="s">append-only audit log</text>
+  <text x="694" y="126" class="s">LangGraph checkpoints</text>
+  <text x="694" y="142" class="s">atomic approve claim</text>
+  <rect x="680" y="170" width="190" height="86" rx="10" fill="#fdeaea" stroke="#e0a3a3"/>
+  <text x="694" y="193" class="t">Redis (optional)</text>
+  <text x="694" y="212" class="s">live event stream (pub/sub)</text>
+  <text x="694" y="228" class="s">sliding-window rate limit</text>
+  <text x="694" y="244" class="s">falls back to per-replica</text>
+  <path d="M620 78 H678" class="line"/><path d="M620 140 H650 V104 H678" class="line"/><path d="M620 202 H678" class="line"/>
+
+  <!-- dispatch -->
+  <rect x="430" y="262" width="190" height="52" rx="10" class="box"/>
+  <text x="444" y="285" class="t">n8n or Zapier</text>
+  <text x="444" y="303" class="s">signed webhook · approved only</text>
+  <path d="M525 228 V260" class="line"/>
+  <rect x="680" y="278" width="190" height="36" rx="10" class="box"/>
+  <text x="694" y="301" class="s">GitHub · Slack · email</text>
+  <path d="M620 288 H678" class="line"/>
+
+  <!-- observability -->
+  <rect x="30" y="346" width="840" height="100" rx="12" fill="#fff" stroke="#9cc5bf" stroke-dasharray="6 4"/>
+  <text x="46" y="368" class="h">OBSERVABILITY PROFILE · docker compose --profile observability</text>
+  <rect x="46" y="384" width="240" height="46" rx="10" class="box"/>
+  <text x="60" y="404" class="t">Prometheus</text><text x="60" y="421" class="s">scrapes each replica, bearer token</text>
+  <rect x="330" y="384" width="240" height="46" rx="10" class="box"/>
+  <text x="344" y="404" class="t">Alert rules</text><text x="344" y="421" class="s">down · 5xx · dispatch failed · slow</text>
+  <rect x="614" y="384" width="240" height="46" rx="10" class="box"/>
+  <text x="628" y="404" class="t">Grafana</text><text x="628" y="421" class="s">provisioned IncidentOps dashboard</text>
+  <path d="M286 407 H328" class="line"/><path d="M570 407 H612" class="line"/>
+  <path d="M166 384 C166 330 300 330 430 150" class="dash"/>
+  <text x="170" y="338" class="s">GET /metrics</text>
+</svg>

@@ -5,7 +5,10 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "incidentops/intake",
-        "responseMode": "responseNode"
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
       },
       "id": "incident-ingress",
       "name": "Slack Incident Ingress",
@@ -14,7 +17,8 @@
       "position": [
         0,
         0
-      ]
+      ],
+      "webhookId": "9ee8dae7-6041-5ef0-a4e3-47649af466c4"
     },
     {
       "parameters": {
@@ -25,7 +29,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        220,
+        880,
         0
       ]
     },
@@ -52,7 +56,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        440,
+        1100,
         0
       ]
     },
@@ -79,7 +83,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
+        1320,
         0
       ]
     },
@@ -93,7 +97,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        880,
+        1540,
         0
       ]
     },
@@ -130,7 +134,8 @@
       "position": [
         1210,
         460
-      ]
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -159,11 +164,12 @@
       "position": [
         330,
         520
-      ]
+      ],
+      "webhookId": "58841bcf-1659-53c3-81e7-7f3deb364fb0"
     },
     {
       "parameters": {
-        "jsCode": "const b = $json.body ?? $json; const key = 'action:' + String(b.idempotency_key ?? ''); if (key === 'action:') throw new Error('idempotency_key required'); const seen = $getWorkflowStaticData('global'); const duplicate = Boolean(seen[key] && seen[key].done); if (!duplicate) seen[key] = {run_id:b.run_id, at:new Date().toISOString(), done:false}; return [{json:{...b,duplicate,execute:!duplicate}}];"
+        "jsCode": "// Minimal Redis client over a raw socket (RESP2). n8n's own Redis node has no SET NX, and a Code\n// node cannot hold credentials, so the idempotency gate speaks to Redis directly.\n// Needs NODE_FUNCTION_ALLOW_BUILTIN=net,tls on the n8n process. URL: redis[s]://[user:pass@]host:port/db\nconst net = require('net');\nconst tls = require('tls');\nfunction redisConfig(raw) {\n  // No URL global in n8n's Code-node sandbox, so parse by hand.\n  const m = /^(rediss?):\\/\\/(?:([^:@\\/]*)(?::([^@\\/]*))?@)?(\\[[^\\]]+\\]|[^:\\/?#]+)(?::(\\d+))?(?:\\/(\\d+))?/.exec(String(raw));\n  if (!m) throw new Error('N8N_REDIS_URL must look like redis://[user:pass@]host:port/db');\n  return { secure: m[1] === 'rediss', host: m[4].replace(/^\\[|\\]$/g, ''), port: Number(m[5] || 6379),\n    user: decodeURIComponent(m[2] || ''), pass: decodeURIComponent(m[3] || ''), db: Number(m[6] || 0) };\n}\nfunction redisEncode(args) {\n  const parts = [Buffer.from('*' + args.length + '\\r\\n')];\n  for (const arg of args) {\n    const b = Buffer.from(String(arg), 'utf8');\n    parts.push(Buffer.from('$' + b.length + '\\r\\n'), b, Buffer.from('\\r\\n'));\n  }\n  return Buffer.concat(parts);\n}\nfunction redisParse(buf, at) {\n  const end = buf.indexOf('\\r\\n', at, 'latin1');\n  if (at >= buf.length || end < 0) return null;\n  const kind = String.fromCharCode(buf[at]);\n  const line = buf.toString('latin1', at + 1, end);\n  if (kind === '+') return [line, end + 2];\n  if (kind === '-') return [new Error(line), end + 2];\n  if (kind === ':') return [Number(line), end + 2];\n  if (kind === '$') {\n    const n = Number(line);\n    if (n < 0) return [null, end + 2];\n    if (buf.length < end + 2 + n + 2) return null;\n    return [buf.toString('utf8', end + 2, end + 2 + n), end + 2 + n + 2];\n  }\n  throw new Error('unsupported redis reply type ' + kind);\n}\nfunction redis(rawUrl, commands, timeoutMs = 3000) {\n  const cfg = redisConfig(rawUrl);\n  const pre = [];\n  if (cfg.pass) pre.push(cfg.user ? ['AUTH', cfg.user, cfg.pass] : ['AUTH', cfg.pass]);\n  if (cfg.db) pre.push(['SELECT', cfg.db]);\n  const all = pre.concat(commands);\n  return new Promise((resolve, reject) => {\n    const socket = (cfg.secure ? tls : net).connect(\n      cfg.secure ? { host: cfg.host, port: cfg.port, servername: cfg.host } : { host: cfg.host, port: cfg.port });\n    let buf = Buffer.alloc(0);\n    const replies = [];\n    let settled = false;\n    const finish = (err, value) => {\n      if (settled) return;\n      settled = true; clearTimeout(timer); socket.destroy();\n      if (err) reject(err); else resolve(value);\n    };\n    const timer = setTimeout(() => finish(new Error('redis timeout')), timeoutMs);\n    socket.on('error', finish);\n    socket.write(Buffer.concat(all.map(redisEncode)));\n    socket.on('data', (chunk) => {\n      buf = Buffer.concat([buf, chunk]);\n      try {\n        let at = 0, parsed;\n        while (replies.length < all.length && (parsed = redisParse(buf, at))) { replies.push(parsed[0]); at = parsed[1]; }\n        buf = buf.subarray(at);\n      } catch (e) { return finish(e); }\n      if (replies.length < all.length) return;\n      const failed = replies.find((r) => r instanceof Error);\n      if (failed) return finish(failed);\n      finish(null, replies.slice(pre.length));\n    });\n  });\n}\n// Claim an approved action before running it. Redis when N8N_REDIS_URL is set (shared by every\n// n8n instance); workflow static data otherwise (one instance only).\nconst LEASE_SECONDS = 600;\nconst b = $json.body ?? $json;\nconst idem = String(b.idempotency_key ?? '');\nif (!idem) throw new Error('idempotency_key required');\nconst key = 'action:' + idem;\nconst url = String($env.N8N_REDIS_URL ?? '');\nif (!url) {\n  const seen = $getWorkflowStaticData('global');\n  const duplicate = Boolean(seen[key] && seen[key].done);\n  if (!duplicate) seen[key] = {run_id:b.run_id, at:new Date().toISOString(), done:false};\n  return [{json:{...b,duplicate,execute:!duplicate,store:'static'}}];\n}\nconst rkey = 'incidentops:n8n:' + key;\nconst token = Date.now().toString(36) + Math.random().toString(36).slice(2);\nconst [claimed] = await redis(url, [['SET', rkey, 'claim:' + token, 'NX', 'EX', LEASE_SECONDS]]);\nif (claimed === 'OK') return [{json:{...b,duplicate:false,execute:true,store:'redis',claim:token}}];\nconst [current] = await redis(url, [['GET', rkey]]);\nif (typeof current === 'string' && current.startsWith('done:')) {\n  return [{json:{...b,duplicate:true,execute:false,store:'redis'}}];\n}\n// Another instance holds the claim and has not finished. Failing makes the caller retry later,\n// instead of answering \"duplicate\" for an action that may still fail.\nthrow new Error('action already in progress on another instance');\n"
       },
       "id": "action-idempotency",
       "name": "Action Idempotency Gate",
@@ -219,7 +225,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const gate = $('Action Idempotency Gate').first().json; const key = 'action:' + String(gate.idempotency_key); const seen = $getWorkflowStaticData('global'); seen[key] = {...(seen[key] || {}), done:true, completed_at:new Date().toISOString()}; return [{json:{...gate,duplicate:false,execute:true}}];"
+        "jsCode": "// Minimal Redis client over a raw socket (RESP2). n8n's own Redis node has no SET NX, and a Code\n// node cannot hold credentials, so the idempotency gate speaks to Redis directly.\n// Needs NODE_FUNCTION_ALLOW_BUILTIN=net,tls on the n8n process. URL: redis[s]://[user:pass@]host:port/db\nconst net = require('net');\nconst tls = require('tls');\nfunction redisConfig(raw) {\n  // No URL global in n8n's Code-node sandbox, so parse by hand.\n  const m = /^(rediss?):\\/\\/(?:([^:@\\/]*)(?::([^@\\/]*))?@)?(\\[[^\\]]+\\]|[^:\\/?#]+)(?::(\\d+))?(?:\\/(\\d+))?/.exec(String(raw));\n  if (!m) throw new Error('N8N_REDIS_URL must look like redis://[user:pass@]host:port/db');\n  return { secure: m[1] === 'rediss', host: m[4].replace(/^\\[|\\]$/g, ''), port: Number(m[5] || 6379),\n    user: decodeURIComponent(m[2] || ''), pass: decodeURIComponent(m[3] || ''), db: Number(m[6] || 0) };\n}\nfunction redisEncode(args) {\n  const parts = [Buffer.from('*' + args.length + '\\r\\n')];\n  for (const arg of args) {\n    const b = Buffer.from(String(arg), 'utf8');\n    parts.push(Buffer.from('$' + b.length + '\\r\\n'), b, Buffer.from('\\r\\n'));\n  }\n  return Buffer.concat(parts);\n}\nfunction redisParse(buf, at) {\n  const end = buf.indexOf('\\r\\n', at, 'latin1');\n  if (at >= buf.length || end < 0) return null;\n  const kind = String.fromCharCode(buf[at]);\n  const line = buf.toString('latin1', at + 1, end);\n  if (kind === '+') return [line, end + 2];\n  if (kind === '-') return [new Error(line), end + 2];\n  if (kind === ':') return [Number(line), end + 2];\n  if (kind === '$') {\n    const n = Number(line);\n    if (n < 0) return [null, end + 2];\n    if (buf.length < end + 2 + n + 2) return null;\n    return [buf.toString('utf8', end + 2, end + 2 + n), end + 2 + n + 2];\n  }\n  throw new Error('unsupported redis reply type ' + kind);\n}\nfunction redis(rawUrl, commands, timeoutMs = 3000) {\n  const cfg = redisConfig(rawUrl);\n  const pre = [];\n  if (cfg.pass) pre.push(cfg.user ? ['AUTH', cfg.user, cfg.pass] : ['AUTH', cfg.pass]);\n  if (cfg.db) pre.push(['SELECT', cfg.db]);\n  const all = pre.concat(commands);\n  return new Promise((resolve, reject) => {\n    const socket = (cfg.secure ? tls : net).connect(\n      cfg.secure ? { host: cfg.host, port: cfg.port, servername: cfg.host } : { host: cfg.host, port: cfg.port });\n    let buf = Buffer.alloc(0);\n    const replies = [];\n    let settled = false;\n    const finish = (err, value) => {\n      if (settled) return;\n      settled = true; clearTimeout(timer); socket.destroy();\n      if (err) reject(err); else resolve(value);\n    };\n    const timer = setTimeout(() => finish(new Error('redis timeout')), timeoutMs);\n    socket.on('error', finish);\n    socket.write(Buffer.concat(all.map(redisEncode)));\n    socket.on('data', (chunk) => {\n      buf = Buffer.concat([buf, chunk]);\n      try {\n        let at = 0, parsed;\n        while (replies.length < all.length && (parsed = redisParse(buf, at))) { replies.push(parsed[0]); at = parsed[1]; }\n        buf = buf.subarray(at);\n      } catch (e) { return finish(e); }\n      if (replies.length < all.length) return;\n      const failed = replies.find((r) => r instanceof Error);\n      if (failed) return finish(failed);\n      finish(null, replies.slice(pre.length));\n    });\n  });\n}\n// Mark the action finished, only after the issue exists, so a failed run stays retryable.\nconst DONE_TTL_SECONDS = 7 * 24 * 3600;\nconst gate = $('Action Idempotency Gate').first().json;\nconst key = 'action:' + String(gate.idempotency_key);\nif (gate.store === 'redis') {\n  await redis(String($env.N8N_REDIS_URL), [['SET', 'incidentops:n8n:' + key, 'done:' + new Date().toISOString(), 'EX', DONE_TTL_SECONDS]]);\n} else {\n  const seen = $getWorkflowStaticData('global');\n  seen[key] = {...(seen[key] || {}), done:true, completed_at:new Date().toISOString()};\n}\nreturn [{json:{...gate,duplicate:false,execute:true}}];\n"
       },
       "id": "mark-action-done",
       "name": "Mark Action Done",
@@ -288,6 +294,77 @@
       "position": [
         1650,
         400
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verify Slack's request signature (https://api.slack.com/authentication/verifying-requests-from-slack).\n// Opt-in: with no SLACK_SIGNING_SECRET the request passes through, like the API's inbound signing.\n// Once a secret is set, a missing, stale or wrong signature is rejected. Pure JS HMAC-SHA256 so\n// the Code node needs no allowed builtins.\nconst K = new Uint32Array([\n  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,\n  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,\n  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,\n  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);\nfunction sha256(data) {\n  const H = new Uint32Array([0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]);\n  const size = ((data.length + 9 + 63) >> 6) << 6;\n  const m = Buffer.alloc(size);\n  data.copy(m); m[data.length] = 0x80;\n  m.writeUInt32BE(Math.floor(data.length / 0x20000000), size - 8);\n  m.writeUInt32BE((data.length << 3) >>> 0, size - 4);\n  const w = new Uint32Array(64);\n  for (let off = 0; off < size; off += 64) {\n    for (let i = 0; i < 16; i++) w[i] = m.readUInt32BE(off + 4 * i);\n    for (let i = 16; i < 64; i++) {\n      const x = w[i - 15], y = w[i - 2];\n      const s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);\n      const s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);\n      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;\n    }\n    let [a, b, c, d, e, f, g, h] = H;\n    for (let i = 0; i < 64; i++) {\n      const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));\n      const t1 = (h + S1 + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;\n      const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));\n      const t2 = (S0 + ((a & b) ^ (a & c) ^ (b & c))) | 0;\n      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;\n    }\n    H[0] += a; H[1] += b; H[2] += c; H[3] += d; H[4] += e; H[5] += f; H[6] += g; H[7] += h;\n  }\n  const out = Buffer.alloc(32);\n  for (let i = 0; i < 8; i++) out.writeUInt32BE(H[i], 4 * i);\n  return out;\n}\nfunction hmacSha256Hex(secret, message) {\n  let key = Buffer.from(secret, 'utf8');\n  if (key.length > 64) key = sha256(key);\n  const pad = Buffer.alloc(64); key.copy(pad);\n  const inner = Buffer.alloc(64), outer = Buffer.alloc(64);\n  for (let i = 0; i < 64; i++) { inner[i] = pad[i] ^ 0x36; outer[i] = pad[i] ^ 0x5c; }\n  return sha256(Buffer.concat([outer, sha256(Buffer.concat([inner, message]))])).toString('hex');\n}\nconst item = $input.first();\nconst secret = String($env.SLACK_SIGNING_SECRET ?? '');\nif (!secret) return [item];\nconst headers = Object.fromEntries(Object.entries(item.json.headers ?? {}).map(([k, v]) => [k.toLowerCase(), String(v)]));\nconst stamp = headers['x-slack-request-timestamp'] ?? '';\nif (!/^\\d{1,12}$/.test(stamp) || Math.abs(Date.now() / 1000 - Number(stamp)) > 300) {\n  throw new Error('slack signature: missing or stale timestamp');\n}\nconst raw = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst expected = 'v0=' + hmacSha256Hex(secret, Buffer.concat([Buffer.from('v0:' + stamp + ':'), raw]));\nconst given = headers['x-slack-signature'] ?? '';\nlet diff = given.length ^ expected.length;\nfor (let i = 0; i < expected.length; i++) diff |= (given.charCodeAt(i) || 0) ^ expected.charCodeAt(i);\nif (diff !== 0) throw new Error('slack signature: invalid');\nreturn [item];\n"
+      },
+      "id": "verify-slack",
+      "name": "Verify Slack Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.body?.type === 'url_verification'}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "slack-url-check",
+      "name": "Slack URL Check?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {challenge:$json.body.challenge} }}"
+      },
+      "id": "answer-challenge",
+      "name": "Answer Slack Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        660,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Minimal Redis client over a raw socket (RESP2). n8n's own Redis node has no SET NX, and a Code\n// node cannot hold credentials, so the idempotency gate speaks to Redis directly.\n// Needs NODE_FUNCTION_ALLOW_BUILTIN=net,tls on the n8n process. URL: redis[s]://[user:pass@]host:port/db\nconst net = require('net');\nconst tls = require('tls');\nfunction redisConfig(raw) {\n  // No URL global in n8n's Code-node sandbox, so parse by hand.\n  const m = /^(rediss?):\\/\\/(?:([^:@\\/]*)(?::([^@\\/]*))?@)?(\\[[^\\]]+\\]|[^:\\/?#]+)(?::(\\d+))?(?:\\/(\\d+))?/.exec(String(raw));\n  if (!m) throw new Error('N8N_REDIS_URL must look like redis://[user:pass@]host:port/db');\n  return { secure: m[1] === 'rediss', host: m[4].replace(/^\\[|\\]$/g, ''), port: Number(m[5] || 6379),\n    user: decodeURIComponent(m[2] || ''), pass: decodeURIComponent(m[3] || ''), db: Number(m[6] || 0) };\n}\nfunction redisEncode(args) {\n  const parts = [Buffer.from('*' + args.length + '\\r\\n')];\n  for (const arg of args) {\n    const b = Buffer.from(String(arg), 'utf8');\n    parts.push(Buffer.from('$' + b.length + '\\r\\n'), b, Buffer.from('\\r\\n'));\n  }\n  return Buffer.concat(parts);\n}\nfunction redisParse(buf, at) {\n  const end = buf.indexOf('\\r\\n', at, 'latin1');\n  if (at >= buf.length || end < 0) return null;\n  const kind = String.fromCharCode(buf[at]);\n  const line = buf.toString('latin1', at + 1, end);\n  if (kind === '+') return [line, end + 2];\n  if (kind === '-') return [new Error(line), end + 2];\n  if (kind === ':') return [Number(line), end + 2];\n  if (kind === '$') {\n    const n = Number(line);\n    if (n < 0) return [null, end + 2];\n    if (buf.length < end + 2 + n + 2) return null;\n    return [buf.toString('utf8', end + 2, end + 2 + n), end + 2 + n + 2];\n  }\n  throw new Error('unsupported redis reply type ' + kind);\n}\nfunction redis(rawUrl, commands, timeoutMs = 3000) {\n  const cfg = redisConfig(rawUrl);\n  const pre = [];\n  if (cfg.pass) pre.push(cfg.user ? ['AUTH', cfg.user, cfg.pass] : ['AUTH', cfg.pass]);\n  if (cfg.db) pre.push(['SELECT', cfg.db]);\n  const all = pre.concat(commands);\n  return new Promise((resolve, reject) => {\n    const socket = (cfg.secure ? tls : net).connect(\n      cfg.secure ? { host: cfg.host, port: cfg.port, servername: cfg.host } : { host: cfg.host, port: cfg.port });\n    let buf = Buffer.alloc(0);\n    const replies = [];\n    let settled = false;\n    const finish = (err, value) => {\n      if (settled) return;\n      settled = true; clearTimeout(timer); socket.destroy();\n      if (err) reject(err); else resolve(value);\n    };\n    const timer = setTimeout(() => finish(new Error('redis timeout')), timeoutMs);\n    socket.on('error', finish);\n    socket.write(Buffer.concat(all.map(redisEncode)));\n    socket.on('data', (chunk) => {\n      buf = Buffer.concat([buf, chunk]);\n      try {\n        let at = 0, parsed;\n        while (replies.length < all.length && (parsed = redisParse(buf, at))) { replies.push(parsed[0]); at = parsed[1]; }\n        buf = buf.subarray(at);\n      } catch (e) { return finish(e); }\n      if (replies.length < all.length) return;\n      const failed = replies.find((r) => r instanceof Error);\n      if (failed) return finish(failed);\n      finish(null, replies.slice(pre.length));\n    });\n  });\n}\n// A step failed after the claim was taken: give the claim back (only if it is still ours), then\n// fail so the caller retries and the action can run again.\nconst gate = $('Action Idempotency Gate').first().json;\nif (gate.store === 'redis') {\n  const script = \"if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end\";\n  try {\n    await redis(String($env.N8N_REDIS_URL), [['EVAL', script, 1, 'incidentops:n8n:action:' + String(gate.idempotency_key), 'claim:' + gate.claim]]);\n  } catch (e) { /* Redis down: the lease expires on its own */ }\n}\nconst why = $input.first().json.error;\nthrow new Error('action failed, claim released: ' + String((why && (why.message || why)) || 'unknown'));\n"
+      },
+      "id": "release-claim",
+      "name": "Release Action Claim",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        640
       ]
     }
   ],
@@ -296,7 +373,7 @@
       "main": [
         [
           {
-            "node": "Normalize Incident",
+            "node": "Verify Slack Signature",
             "type": "main",
             "index": 0
           }
@@ -384,6 +461,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Release Action Claim",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -424,6 +508,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Release Action Claim",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -448,6 +539,35 @@
           }
         ]
       ]
+    },
+    "Verify Slack Signature": {
+      "main": [
+        [
+          {
+            "node": "Slack URL Check?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack URL Check?": {
+      "main": [
+        [
+          {
+            "node": "Answer Slack Challenge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normalize Incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
@@ -455,5 +575,5 @@
     "executionOrder": "v1"
   },
   "active": false,
-  "versionId": "incidentops-copilot-v2"
+  "versionId": "incidentops-copilot-v3"
 }

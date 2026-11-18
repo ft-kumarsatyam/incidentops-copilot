@@ -2,7 +2,18 @@ services:
   api:
     build: .
     environment:
+      # Compose ships development defaults (local-*). The API refuses to start with them unless
+      # INCIDENTOPS_ENV=dev, so set real secrets AND INCIDENTOPS_ENV=prod before exposing it.
+      INCIDENTOPS_ENV: ${INCIDENTOPS_ENV:-dev}
       INCIDENTOPS_API_KEY: ${INCIDENTOPS_API_KEY:-local-development-key}
+      # Single sign-on: set both to accept `Authorization: Bearer <JWT>` from your IdP.
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_ROLES_CLAIM: ${OIDC_ROLES_CLAIM:-roles}
+      OIDC_TENANT_CLAIM: ${OIDC_TENANT_CLAIM:-tenant_id}
+      # Governance: distinct approvers for SEV-1 (needs named identities), no self-approval.
+      FOUR_EYES_APPROVALS: ${FOUR_EYES_APPROVALS:-1}
+      FORBID_SELF_APPROVAL: ${FORBID_SELF_APPROVAL:-false}
       N8N_ACTION_WEBHOOK_URL: http://n8n:5678/webhook/incidentops/actions
       N8N_ACTION_TOKEN: ${N8N_ACTION_TOKEN:-local-action-token}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -14,8 +25,18 @@ services:
       REDIS_URL: ${REDIS_URL:-}
       RUNBOOK_DIR: /app/runbooks
       RUNBOOK_DB: /app/.data/runbooks.db
+      # postgres: one shared runbook index in DATABASE_URL instead of a file per replica.
+      RUNBOOK_STORE: ${RUNBOOK_STORE:-sqlite}
       AUTO_INDEX_RUNBOOKS: "true"
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # async: POST /incidents answers 202 and workers run the analysis (with retries and a
+      # dead-letter state). WORKER_CONCURRENCY is the in-process worker count; set it to 0 and use
+      # the `workers` profile to run workers as separate containers.
+      EXECUTION_MODE: ${EXECUTION_MODE:-sync}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      # Prometheus scrape endpoint, protected by a bearer token. Used by the observability profile.
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      METRICS_TOKEN: ${METRICS_TOKEN:-local-metrics-token}
     depends_on:
       db:
         condition: service_healthy
@@ -37,7 +58,7 @@ services:
 
   db:
     profiles: ["postgres"]
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: incidentops
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-db-password}
@@ -61,6 +82,78 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Dedicated workers: scale with `docker compose --profile workers up --scale worker=3`.
+  # Needs EXECUTION_MODE=async and WORKER_CONCURRENCY=0 on the api, plus a shared database
+  # (the postgres profile) so the api and every worker see the same queue. Add the redis profile
+  # so status changes made here reach clients watching the api's live stream.
+  worker:
+    profiles: ["workers"]
+    build: .
+    command: ["incidentops", "worker"]
+    environment:
+      INCIDENTOPS_ENV: ${INCIDENTOPS_ENV:-dev}
+      EXECUTION_MODE: async
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DATABASE_PATH: /app/.data/incidentops.db
+      DATABASE_URL: ${DATABASE_URL:-}
+      REDIS_URL: ${REDIS_URL:-}
+      RUNBOOK_DIR: /app/runbooks
+      RUNBOOK_DB: /app/.data/runbooks.db
+      # postgres: one shared runbook index in DATABASE_URL instead of a file per replica.
+      RUNBOOK_STORE: ${RUNBOOK_STORE:-sqlite}
+      AUTO_INDEX_RUNBOOKS: "true"
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      N8N_ACTION_WEBHOOK_URL: http://n8n:5678/webhook/incidentops/actions
+      N8N_ACTION_TOKEN: ${N8N_ACTION_TOKEN:-local-action-token}
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+    volumes:
+      - incidentops-data:/app/.data
+    stop_grace_period: 35s  # the worker lets running jobs finish for up to 30s on SIGTERM
+    restart: unless-stopped
+
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.5.0
+    environment:
+      METRICS_TOKEN: ${METRICS_TOKEN:-local-metrics-token}
+    # The scrape token is written to a file at start so it never lives in the config.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - printf '%s' "$$METRICS_TOKEN" > /tmp/metrics_token && exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:12.1.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/incidentops.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
   n8n:
     image: ${N8N_IMAGE:-n8nio/n8n:2.49.0}
     depends_on:
@@ -76,6 +169,13 @@ services:
       N8N_PUBLIC_URL: ${N8N_PUBLIC_URL:-http://localhost:5678}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-this-before-sharing}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      # Set to verify Slack's X-Slack-Signature on the intake webhook (opt-in; empty skips the check).
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      # Set (for example redis://redis:6379/1 with --profile redis) so every n8n instance shares one
+      # idempotency store. Empty uses workflow static data, which is per instance.
+      N8N_REDIS_URL: ${N8N_REDIS_URL:-}
+      # The Redis claim talks to Redis from a Code node, which needs these builtins allowed.
+      NODE_FUNCTION_ALLOW_BUILTIN: net,tls
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITHUB_REPO: ${GITHUB_REPO:-}
       N8N_SECURE_COOKIE: "false"
@@ -90,3 +190,5 @@ volumes:
   incidentops-data:
   pg-data:
   n8n-data:
+  prometheus-data:
+  grafana-data:

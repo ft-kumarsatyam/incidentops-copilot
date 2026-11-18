@@ -43,6 +43,8 @@ dev = [
   "psycopg[binary,pool]>=3.2",
   "langgraph-checkpoint-postgres>=2.0",
   "redis>=5.0",
+  "prometheus-client>=0.20",
+  "pyjwt[crypto]>=2.8",
   "ruff>=0.6",
   "mypy>=1.11",
   "pre-commit>=3.7",
@@ -53,6 +55,8 @@ postgres = [
   "langgraph-checkpoint-postgres>=2.0",
 ]
 redis = ["redis>=5.0"]
+metrics = ["prometheus-client>=0.20"]
+oidc = ["pyjwt[crypto]>=2.8"]
 mcp = ["mcp>=1.0"]
 otel = [
   "opentelemetry-api>=1.25",

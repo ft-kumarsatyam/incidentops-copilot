@@ -51,25 +51,45 @@ There is no approve link in Slack, because a link that changes state on a plain
 `Bearer` token and an `Idempotency-Key`. The workflow checks the token, then the
 gate, then creates one GitHub issue listing only the `approved_actions`.
 
+## Slack signature check
+
+Set `SLACK_SIGNING_SECRET` (Slack app > Basic Information > Signing Secret) on n8n and the intake
+webhook verifies `X-Slack-Signature` before anything else runs: a missing, forged or stale (over 5
+minutes) request is rejected and creates nothing. Slack's first `url_verification` request is
+answered with its challenge, so the Events API setup completes. With no secret the check is off,
+which is fine for a demo and not for production. The code is pure JavaScript (no allowed builtins
+needed) and the webhook keeps the raw body, because the signature covers the exact bytes.
+
 ## Idempotency
 
-The gate stores the key in workflow static data in two steps: `done: false` when
-the request arrives and `done: true` only after the issue exists. That way:
+Two stores, chosen by `N8N_REDIS_URL`:
+
+| | Static data (default) | Redis (`N8N_REDIS_URL` set) |
+|---|---|---|
+| Shared by several n8n instances | No | Yes |
+| Two identical requests at the same instant | Could both run | One runs, the other fails and is retried |
+| Instance crashes mid-run | Key stays unfinished, retry runs | The claim is a 10 minute lease, then free |
+| Needs | nothing | `NODE_FUNCTION_ALLOW_BUILTIN=net,tls` on n8n |
+
+Redis keys are `incidentops:n8n:action:<idempotency_key>`. The gate takes the claim with
+`SET key claim:<token> NX EX 600`; a finished action is stored as `done:<time>` for 7 days.
 
 | Situation | Result |
 |---|---|
-| Same request twice after success | Second one is skipped, no duplicate issue |
-| GitHub failed, API retries | Runs again, because the key was never marked done |
-| Two identical requests at the same instant | Could both run; the window is tiny, but see below |
+| Same request twice after success | Second one is skipped (`duplicate: true`), no duplicate issue |
+| GitHub or email fails | The claim is released (only if it is still ours) and the request fails, so the API retries and the action runs again |
+| Another instance is mid-run | The request fails with "already in progress"; the API retries with backoff instead of being told "duplicate" for an action that may still fail |
+| Redis is unreachable | The request fails. It never runs unguarded |
 
-Static data is fine for a demo and a single n8n instance. For production,
-replace it with Redis `SET NX` or a database unique constraint, and treat the
-GitHub `Idempotency-Key` header as advisory only.
+The Redis client is a few lines in the Code nodes because n8n's Redis node has no `SET NX` and a
+Code node cannot hold credentials. The logic lives in [src/](src/) and `make n8n-build` copies it
+into the workflow JSON (`make n8n-check` fails CI if they drift). `make e2e-n8n` runs two real n8n
+containers against one Redis to prove all of the above.
 
 ## Hardening checklist before going live
 
-- Verify Slack's request signature (`X-Slack-Signature`) on the intake webhook.
-  The template does not, because the signing secret is workspace specific.
+- Set `SLACK_SIGNING_SECRET` so the intake webhook verifies Slack's signature.
+- Set `N8N_REDIS_URL` if you run more than one n8n instance.
 - Use a fine-grained GitHub token limited to issues on one repository.
 - Keep the actions webhook off the public internet, or at least behind the
   token check as shipped.

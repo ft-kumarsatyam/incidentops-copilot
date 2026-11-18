@@ -6,13 +6,16 @@ import math
 import sqlite3
 import struct
 from contextlib import closing
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from incidentops.rag.fts import index_runbooks, search_runbooks
 
 
+@lru_cache(maxsize=1)
 def _load_embedder() -> Any:
+    """The embedding model, loaded once per process (it took seconds on every search)."""
     try:
         from fastembed import TextEmbedding
     except ImportError as error:

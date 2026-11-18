@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Response
 
 from incidentops.api.deps import get_service, get_settings
 from incidentops.core.config import Settings
+from incidentops.rag import runbook_index_status
 from incidentops.workflows.incident.service import IncidentService
 
 router = APIRouter(tags=["health"])
@@ -33,7 +34,13 @@ def ready(
     if settings.redis_url:
         # Informational: with Redis down the API still serves (stream and limiter fall back local).
         checks["redis"] = "ok" if service.events.ping() else "unavailable"
-    checks["runbook_index"] = "ok" if settings.runbook_db.is_file() else "missing"
+    # Informational: a deep queue or dead jobs flag a problem, but this instance is still ready.
+    queue = service.jobs.stats()
+    checks["queue"] = (
+        f"queued={queue['queued']} running={queue['running']} dead={queue['dead']} "
+        f"oldest_wait_s={queue['oldest_queued_seconds']}"
+    )
+    checks["runbook_index"] = runbook_index_status(settings)
     checks["n8n_actions"] = "configured" if settings.n8n_action_webhook_url else "not_configured"
     action_url = (
         settings.zapier_action_webhook_url

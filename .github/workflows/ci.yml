@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_PASSWORD: test
         ports:
@@ -62,6 +62,8 @@ jobs:
           .venv/bin/ruff format --check .
       - name: Type check
         run: .venv/bin/mypy
+      - name: n8n workflow is built from n8n/src
+        run: .venv/bin/python scripts/build_n8n.py --check
       - name: Test with coverage
         # TESTS_STRICT makes a missing service or extra fail instead of skip, so a green run means
         # every test ran. TEST_DATABASE_URL and TEST_REDIS_URL point at the service containers
@@ -75,8 +77,10 @@ jobs:
         run: .venv/bin/python -m evals.run_evals --provider rules
       - name: Guardrail evals (attack block rate and false-positive rate must both be 100%)
         run: .venv/bin/python -m evals.guardrail_eval
-      - name: Retrieval evals (FTS baseline + query rewrite)
-        run: .venv/bin/python -m evals.run_retrieval_evals --modes fts,rewrite
+      - name: Retrieval evals (SQLite FTS + rewrite, Postgres FTS + pgvector)
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:test@localhost:5432/postgres
+        run: .venv/bin/python -m evals.run_retrieval_evals --modes fts,rewrite,pg-fts,pgvector
 
   web:
     runs-on: ubuntu-latest

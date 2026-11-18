@@ -9,6 +9,24 @@ describe("status and severity labels", () => {
     expect(statusMeta("succeeded").needsAttention).toBe(false);
   });
 
+  it("describes queued and failed-analysis runs, and only the failure needs attention", () => {
+    expect(statusMeta("queued")).toMatchObject({ label: "Queued", needsAttention: false });
+    expect(statusMeta("errored")).toMatchObject({ label: "Analysis failed", tone: "danger", needsAttention: true });
+  });
+
+  it("keeps queued and errored runs in the open tab, never in resolved", () => {
+    for (const status of ["queued", "errored"] as const) {
+      expect(inTab(incident({ status }), "open")).toBe(true);
+      expect(inTab(incident({ status }), "resolved")).toBe(false);
+    }
+  });
+
+  it("lists a run that failed analysis ahead of newer runs that are fine", () => {
+    const errored = incident({ run_id: "bad", status: "errored", updated_at: "2026-01-01T00:00:00Z" });
+    const queued = incident({ run_id: "new", status: "queued", updated_at: "2026-03-01T00:00:00Z" });
+    expect(sortIncidents([queued, errored]).map((i) => i.run_id)).toEqual(["bad", "new"]);
+  });
+
   it("does not crash on an unknown status from a newer server", () => {
     expect(statusMeta("something_new")).toMatchObject({ label: "something_new", tone: "neutral" });
   });

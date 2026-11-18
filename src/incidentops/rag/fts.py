@@ -30,9 +30,9 @@ def _chunks(text: str, fallback_title: str) -> list[tuple[str, str]]:
     return chunks
 
 
-def index_runbooks(directory: Path, database: Path) -> int:
+def load_chunks(directory: Path) -> list[tuple[str, str, str, str]]:
+    """Every runbook chunk as ``(path, doc, title, content)``. Shared by every index backend."""
     root = directory.resolve()
-    database.parent.mkdir(parents=True, exist_ok=True)
     rows: list[tuple[str, str, str, str]] = []
     if root.is_dir():
         for path in sorted(root.rglob("*.md")):
@@ -45,6 +45,12 @@ def index_runbooks(directory: Path, database: Path) -> int:
             rows.extend(
                 (relative, doc, title, content) for title, content in _chunks(text, path.stem)
             )
+    return rows
+
+
+def index_runbooks(directory: Path, database: Path) -> int:
+    database.parent.mkdir(parents=True, exist_ok=True)
+    rows = load_chunks(directory)
 
     with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute("DROP TABLE IF EXISTS runbook_chunks")

@@ -10,6 +10,7 @@ export interface StatusMeta {
 }
 
 const STATUS: Record<RunStatus, StatusMeta> = {
+  queued: { label: "Queued", tone: "neutral", hint: "Waiting for a worker to pick this up.", needsAttention: false },
   running: { label: "Analyzing", tone: "info", hint: "The agents are gathering evidence.", needsAttention: false },
   busy: { label: "Updating", tone: "info", hint: "A decision is being applied.", needsAttention: false },
   awaiting_approval: {
@@ -26,6 +27,12 @@ const STATUS: Record<RunStatus, StatusMeta> = {
   },
   succeeded: { label: "Approved", tone: "ok", hint: "Approved actions were handed off.", needsAttention: false },
   cancelled: { label: "Rejected", tone: "neutral", hint: "No actions were taken.", needsAttention: false },
+  errored: {
+    label: "Analysis failed",
+    tone: "danger",
+    hint: "The analysis could not finish after several tries. Retry it.",
+    needsAttention: true,
+  },
   failed: {
     label: "Hand-off failed",
     tone: "danger",

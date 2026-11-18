@@ -1,15 +1,25 @@
-"""Benchmark runbook retrieval (FTS vs hybrid vs query rewrite).
+"""Benchmark runbook retrieval (FTS vs hybrid vs query rewrite, SQLite and Postgres).
 
 python -m evals.run_retrieval_evals
 python -m evals.run_retrieval_evals --modes fts,rewrite,hybrid
+TEST_DATABASE_URL=postgresql://... python -m evals.run_retrieval_evals \\
+    --modes fts,rewrite,pg-fts,pgvector
+
+``pg-fts`` and ``pgvector`` run the shared Postgres store (``RUNBOOK_STORE=postgres``) in a
+throwaway database on the server named by ``TEST_DATABASE_URL``; ``pgvector`` also needs the
+pgvector extension and the ``rag`` extra.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import tempfile
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -17,7 +27,9 @@ from typing import Any
 from evals.retrieval_scorers import effective_query, score_case
 from incidentops.rag import (
     HybridRetriever,
+    PostgresRetriever,
     index_runbooks,
+    index_runbooks_postgres,
     index_runbooks_with_embeddings,
     search_runbooks,
 )
@@ -70,6 +82,38 @@ def _hybrid_available() -> bool:
     return True
 
 
+POSTGRES_MODES = ("pg-fts", "pgvector")
+
+
+@contextmanager
+def _scratch_database(admin_url: str) -> Iterator[str]:
+    """A throwaway database on the server, so the eval never touches real data."""
+    import psycopg
+    from psycopg.conninfo import conninfo_to_dict, make_conninfo
+
+    name = f"incidentops_eval_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(admin_url, autocommit=True) as admin:
+        admin.execute(f'CREATE DATABASE "{name}"')
+    try:
+        yield make_conninfo(**{**conninfo_to_dict(admin_url), "dbname": name})
+    finally:
+        with psycopg.connect(admin_url, autocommit=True) as admin:
+            admin.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+
+
+def _postgres_available(mode: str) -> str | None:
+    """Why a Postgres mode cannot run here, or None when it can."""
+    if not os.environ.get("TEST_DATABASE_URL"):
+        return "TEST_DATABASE_URL is not set"
+    try:
+        import psycopg  # noqa: F401
+    except ImportError:
+        return "the postgres extra is not installed"
+    if mode == "pgvector" and not _hybrid_available():
+        return "fastembed is not installed (install the [rag] extra)"
+    return None
+
+
 def _build_index(mode: str, database: Path) -> None:
     if mode == "hybrid":
         index_runbooks_with_embeddings(ROOT / "runbooks", database)
@@ -77,7 +121,30 @@ def _build_index(mode: str, database: Path) -> None:
         index_runbooks(ROOT / "runbooks", database)
 
 
+def _run_postgres(mode: str, cases: list[dict[str, Any]]) -> ModeReport:
+    report = ModeReport(mode)
+    with _scratch_database(os.environ["TEST_DATABASE_URL"]) as url:
+        hybrid = mode == "pgvector"
+        index_runbooks_postgres(ROOT / "runbooks", url, embeddings=hybrid)
+        retriever = PostgresRetriever(url, hybrid=hybrid)
+        for case in cases:
+            prefer = case.get("prefer")
+            hits = retriever.search(
+                effective_query(case), int(case.get("k", 3)), prefer=str(prefer) if prefer else None
+            )
+            report.rows.append(
+                CaseRow(
+                    name=case["name"],
+                    scores=score_case(hits, case),
+                    top_path=hits[0]["path"] if hits else None,
+                )
+            )
+    return report
+
+
 def run_mode(mode: str, cases: list[dict[str, Any]]) -> ModeReport:
+    if mode in POSTGRES_MODES:
+        return _run_postgres(mode, cases)
     report = ModeReport(mode)
     with tempfile.TemporaryDirectory() as tmp:
         database = Path(tmp) / "runbooks.db"
@@ -152,6 +219,16 @@ def render(reports: list[ModeReport]) -> str:
                 "([ADR 007](../docs/adr/007-hybrid-runbook-retrieval.md))."
             )
         lines.append("")
+    pg_modes = [r.mode for r in reports if r.mode in POSTGRES_MODES]
+    if pg_modes:
+        lines += [
+            "",
+            "`pg-fts` and `pgvector` run the shared Postgres store "
+            "(`RUNBOOK_STORE=postgres`) with the rewritten query, like `rewrite` and `hybrid` do "
+            "on SQLite. `pgvector` also searches the HNSW vector index, so it can return a runbook "
+            "that shares no words with the query.",
+            "",
+        ]
     lines += ["Regenerate with `make eval-retrieval`."]
     return "\n".join(lines) + "\n"
 
@@ -161,7 +238,7 @@ def main() -> int:
     parser.add_argument(
         "--modes",
         default="fts,rewrite",
-        help="comma-separated: fts, rewrite, hybrid",
+        help="comma-separated: fts, rewrite, hybrid, pg-fts, pgvector",
     )
     parser.add_argument("--out", type=Path, default=Path(__file__).parent / "retrieval_report.md")
     parser.add_argument(
@@ -175,6 +252,11 @@ def main() -> int:
     if "hybrid" in modes and not _hybrid_available():
         print("fastembed not installed; skipping hybrid (install [rag] extra)", file=sys.stderr)
         modes = [m for m in modes if m != "hybrid"]
+    for mode in [m for m in modes if m in POSTGRES_MODES]:
+        reason = _postgres_available(mode)
+        if reason:
+            print(f"skipping {mode}: {reason}", file=sys.stderr)
+            modes.remove(mode)
     cases = load_cases()
     reports = [run_mode(mode, cases) for mode in modes]
     text = render(reports)

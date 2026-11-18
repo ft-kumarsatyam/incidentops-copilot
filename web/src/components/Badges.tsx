@@ -23,6 +23,8 @@ export const toneClasses: Record<Tone, string> = {
 };
 
 const STATUS_ICON: Record<string, LucideIcon> = {
+  queued: Clock,
+  errored: AlertTriangle,
   running: Loader2,
   busy: Loader2,
   awaiting_approval: Clock,

@@ -62,8 +62,9 @@ Measured in this repository, reproducible with `make check`:
   published numbers yet. Ten cases is a smoke test, not a benchmark.
 - **No pilot.** There is no measured time saved. `scripts/measure_impact.py` takes
   assumptions and says so.
-- **Single instance, single shared API key**, no per-user accounts, and Slack
-  signature verification is left to the deployer. See [SECURITY](../SECURITY.md).
+- **No browser login flow** (the UI takes a pasted SSO token or key), an audit chain that is
+  tamper-evident rather than tamper-proof, and Slack signature verification left to the
+  deployer. See [SECURITY](../SECURITY.md).
 - The Docker image build is defined in CI but has not been verified locally.
 
 ## Running cost and risk

@@ -38,6 +38,16 @@ export function pipelineStages(
       : undefined;
 
   switch (status) {
+    case "queued":
+      set("research", "pending", "Waiting for a worker");
+      set("triage", "pending");
+      set("review", "pending");
+      break;
+    case "errored":
+      set("research", "error", "Analysis failed");
+      set("triage", "pending");
+      set("review", "pending");
+      break;
     case "running":
     case "busy":
       set("triage", "current", specialistNote);

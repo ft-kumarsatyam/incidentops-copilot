@@ -98,8 +98,8 @@ Docker: `docker compose up --build` for API + n8n (pilot behind your VPN).
 3. **Eval-driven complexity** — specialist swarm rejected with data; hybrid RAG
    gated by retrieval metrics.
 4. **Operational split** — Python reasons; n8n holds Slack/GitHub credentials.
-5. **Honest limits** — SQLite single instance, shared API key, Slack signature
-   verification left to deployers ([PROJECT_BRIEF.md](PROJECT_BRIEF.md)).
+5. **Honest limits** — no browser SSO redirect flow, a tamper-evident (not tamper-proof) audit
+   chain, Slack signature verification left to deployers ([PROJECT_BRIEF.md](PROJECT_BRIEF.md)).
 
 ## Resume bullets (accurate phrasing)
 

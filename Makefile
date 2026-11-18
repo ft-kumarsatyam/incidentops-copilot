@@ -9,7 +9,7 @@ TEST_ENV := TESTS_STRICT=1 \
 	TEST_DATABASE_URL=postgresql://postgres:test@localhost:55432/postgres \
 	TEST_REDIS_URL=redis://localhost:56379/0
 
-.PHONY: help setup index dev serve demo test test-fast test-services test-services-down cov eval eval-guardrails eval-claude eval-architecture eval-retrieval e2e-smoke lint format typecheck check web-install web-dev web-build web-test up down clean
+.PHONY: help setup index dev serve demo test test-fast test-services test-services-down cov eval eval-guardrails eval-claude eval-architecture eval-retrieval e2e-smoke badges badges-check n8n-build n8n-check e2e-n8n loadtest lint format typecheck check web-install web-dev web-build web-test up down clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-19s\033[0m %s\n", $$1, $$2}'
@@ -77,8 +77,26 @@ e2e-smoke: index demo ## End-to-end CLI smoke (demo fixture + timeline asserts)
 	@INCIDENTOPS_ENV=dev LOG_LEVEL=ERROR $(BIN)/incidentops incident \
 		--fixture tests/fixtures/incident_complete.json | $(PY) -c "import json,sys; s=json.load(sys.stdin); t=' '.join(s.get('timeline',[])); assert 'research' in t and 'assessed' in t, t"
 
-eval-retrieval: ## Score runbook retrieval (FTS vs query rewrite; hybrid when [rag] is installed)
-	$(PY) -m evals.run_retrieval_evals --modes fts,rewrite,hybrid
+eval-retrieval: test-services ## Score runbook retrieval: SQLite FTS/rewrite/hybrid and the Postgres store (needs Docker)
+	$(TEST_ENV) $(PY) -m evals.run_retrieval_evals --modes fts,rewrite,hybrid,pg-fts,pgvector
+
+loadtest: ## Measure latency at 1, 2 and 4 API replicas and write evals/loadtest_report.md (needs Docker; ~5 min)
+	$(PY) scripts/loadtest.py matrix --replicas 1,2,4 --users 16,64 --seconds 30
+
+badges: ## Rewrite the README badge files from the eval reports (run the evals first)
+	$(PY) scripts/update_badges.py
+
+badges-check: ## Fail if the committed badge files are out of date with the eval reports
+	$(PY) scripts/update_badges.py --check
+
+n8n-build: ## Copy n8n/src/*.js into n8n/incident-ops.json
+	$(PY) scripts/build_n8n.py
+
+n8n-check: ## Fail if the workflow JSON is out of date with n8n/src
+	$(PY) scripts/build_n8n.py --check
+
+e2e-n8n: ## Run the workflow in real n8n containers (needs docker, Redis from `make test-services`, and the API on :8012)
+	$(PY) scripts/e2e_n8n.py
 
 lint: ## Lint and check formatting
 	$(BIN)/ruff check .
@@ -91,7 +109,7 @@ format: ## Auto-format and fix lint issues
 typecheck: ## Strict type checking
 	$(BIN)/mypy
 
-check: lint typecheck cov eval eval-guardrails eval-retrieval web-test ## Everything CI runs
+check: lint typecheck cov eval eval-guardrails eval-retrieval badges-check n8n-check web-test ## Everything CI runs
 
 up: ## Start API + n8n with Docker Compose
 	docker compose up --build

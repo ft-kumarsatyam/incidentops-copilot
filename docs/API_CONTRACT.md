@@ -5,10 +5,16 @@ Interactive docs are served by the running API at `/docs` (OpenAPI at
 
 ## Conventions
 
-- **Auth:** send `X-API-Key: <INCIDENTOPS_API_KEY>`. Outside `INCIDENTOPS_ENV=dev`
-  the service refuses to start without a key. `/health` and `/ready` are open.
-- **Actor:** optionally send `X-Actor: alice` so the audit log names who acted.
-  It is trusted only as far as the API key is.
+- **Auth:** send `Authorization: Bearer <token>` with an SSO access token or a scoped key
+  (`iops_...`), or `X-API-Key: <INCIDENTOPS_API_KEY>` (the legacy shared key). Outside
+  `INCIDENTOPS_ENV=dev` the service refuses to start without a key or `OIDC_ISSUER`. `/health` and
+  `/ready` are open. A missing or wrong credential gets `401 {"detail": "invalid credentials"}`;
+  a valid one without the needed role gets `403`.
+- **Roles:** `viewer` (read) < `responder` (open, retry, queue) < `approver` (decide) <
+  `admin` (keys, audit search/export/verify). `GET /me` shows yours.
+- **Tenants:** you only see your own tenant's incidents; another tenant's run is `404`.
+- **Actor:** with an SSO token or scoped key the audit actor is the identity and `X-Actor` is
+  ignored. Only the shared key honours `X-Actor` (unverified).
 - **Request ID:** every response carries `X-Request-ID`. Send your own to
   correlate logs.
 - **Errors:** JSON `{"detail": "..."}` for domain errors. Middleware errors use
@@ -28,6 +34,13 @@ Interactive docs are served by the running API at `/docs` (OpenAPI at
 | `GET` | `/incidents/{run_id}/audit` | Audit trail |
 | `POST` | `/incidents/{run_id}/decision` | Approve or reject |
 | `POST` | `/incidents/{run_id}/retry-dispatch` | Resend a failed dispatch |
+| `POST` | `/incidents/{run_id}/retry-run` | Re-queue a failed analysis |
+| `GET` | `/queue` | Queue counts and your dead jobs (responder) |
+| `GET` | `/me` | The authenticated identity, roles and permissions |
+| `POST` / `GET` / `DELETE` | `/admin/keys`, `/admin/keys/{id}` | Manage scoped keys for your tenant (admin) |
+| `GET` | `/audit` | Search the audit log: `run_id`, `event`, `actor`, `since`, `until`, `limit`, `offset` (admin) |
+| `GET` | `/audit/verify` | Recompute the hash chain (admin) |
+| `GET` | `/audit/export` | The log as NDJSON ending with a chain check (admin) |
 
 ### `GET /incidents`
 
@@ -85,6 +98,14 @@ Response (abridged):
 
 Statuses: `running`, `awaiting_approval`, `needs_human`, `succeeded`, `failed`,
 `cancelled`. `busy` appears briefly while a decision or retry is in flight.
+
+### Four-eyes approval
+
+For severities in `FOUR_EYES_SEVERITIES`, `POST .../decision` with `approved` records one
+approval and returns the incident still `awaiting_approval`, with
+`approval_progress: {"required": 2, "approved_by": ["..."]}`. A different named approver who
+chooses the same `approved_actions` completes it. A `rejected` decision from anyone acts at once.
+`403` if the caller is the shared key (or opened the incident, with `FORBID_SELF_APPROVAL`).
 
 ### `POST /incidents/{run_id}/decision`
 

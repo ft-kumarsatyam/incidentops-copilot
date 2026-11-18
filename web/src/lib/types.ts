@@ -1,11 +1,13 @@
 export type RunStatus =
+  | "queued"
   | "running"
   | "busy"
   | "awaiting_approval"
   | "needs_human"
   | "succeeded"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "errored";
 
 export type Severity = "SEV-1" | "SEV-2" | "SEV-3";
 
@@ -42,7 +44,22 @@ export interface AiInfo {
   roles?: AiRoleInvocation[];
 }
 
+export interface Me {
+  subject: string;
+  actor: string;
+  tenant: string;
+  roles: string[];
+  method: "oidc" | "api-key" | "shared-key" | "anonymous";
+  permissions: string[];
+}
+
+export interface ApprovalProgress {
+  required: number;
+  approved_by: string[];
+}
+
 export interface Incident {
+  approval_progress?: ApprovalProgress;
   run_id: string;
   idempotency_key: string;
   status: RunStatus;
@@ -65,6 +82,7 @@ export interface Incident {
   retries: number;
   approval: "approved" | "rejected" | null;
   action_dispatch: "sent" | "not_configured" | "failed" | null;
+  error?: string | null;
   ai: AiInfo | null;
   ai_review: { provider: string; verdict: string; fallback_reason: string | null } | null;
   created_at: string | null;

@@ -37,6 +37,25 @@ describe("pipelineStages", () => {
     });
   });
 
+  it("shows a queued run as waiting for a worker, before any analysis step", () => {
+    const stages = pipelineStages({ status: "queued", approval: null, action_dispatch: null });
+    expect(Object.fromEntries(stages.map((s) => [s.id, s.state]))).toMatchObject({
+      intake: "done",
+      research: "pending",
+      triage: "pending",
+      approval: "pending",
+    });
+    expect(stages.find((s) => s.id === "research")?.note).toBe("Waiting for a worker");
+  });
+
+  it("marks the analysis step as failed when the run errored", () => {
+    expect(states({ status: "errored", approval: null, action_dispatch: null })).toMatchObject({
+      intake: "done",
+      research: "error",
+      approval: "pending",
+    });
+  });
+
   it("shows work in progress at triage", () => {
     expect(states({ status: "running", approval: null, action_dispatch: null })).toMatchObject({
       triage: "current",

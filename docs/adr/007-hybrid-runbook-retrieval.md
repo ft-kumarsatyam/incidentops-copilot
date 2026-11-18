@@ -50,3 +50,9 @@ Regenerate [`evals/retrieval_report.md`](../../evals/retrieval_report.md) with
 
 Re-evaluate the default when the retrieval suite grows or FTS recall on `rewrite`
 mode falls below the CI gate.
+## Update: shared Postgres store
+
+The migration the decision anticipated is done for Postgres. `RUNBOOK_STORE=postgres` keeps the
+index in `DATABASE_URL` (full-text search, and pgvector for hybrid) behind the same retriever
+interface, so replicas share one corpus. Qdrant remains a possible store behind the same interface.
+The defaults are unchanged: SQLite, FTS plus rewrite.

@@ -2,6 +2,7 @@ import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useToast } from "../hooks/useToast";
 import { api } from "../lib/api";
+import type { Me } from "../lib/types";
 import { saveSettings, useSettings } from "../lib/settings";
 
 const input = "bg-surface w-full rounded-lg border border-line px-3 py-2 text-sm";
@@ -11,6 +12,7 @@ export function SettingsPage() {
   const toast = useToast();
   const [testing, setTesting] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [me, setMe] = useState<Me | null>(null);
   const [serverAi, setServerAi] = useState<{ topology?: string; mcp_enabled?: boolean } | null>(null);
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export function SettingsPage() {
       remember: form.get("remember") === "on",
     });
     setVerified(false);
+    setMe(null);
     toast("success", "Settings saved.");
   };
 
@@ -38,8 +41,9 @@ export function SettingsPage() {
     setTesting(true);
     try {
       await api.list(1);
+      setMe(await api.me().catch(() => null));
       setVerified(true);
-      toast("success", "Connected. Your key works.");
+      toast("success", "Connected. Your credential works.");
     } catch (failure) {
       setVerified(false);
       toast("error", failure instanceof Error ? failure.message : "Connection failed.");
@@ -70,11 +74,14 @@ export function SettingsPage() {
             Your name
           </label>
           <input id="actor" name="actor" defaultValue={settings.actor} className={input} autoComplete="name" />
-          <p className="text-muted mt-1 text-xs">Recorded in the activity log next to your decisions.</p>
+          <p className="text-muted mt-1 text-xs">
+            Recorded in the activity log next to your decisions. A scoped key or SSO token carries its own
+            identity, and the server ignores this name for it.
+          </p>
         </div>
         <div>
           <label htmlFor="apiKey" className="mb-1 block text-sm font-medium">
-            API key
+            API key or access token
           </label>
           <input
             id="apiKey"
@@ -85,6 +92,9 @@ export function SettingsPage() {
             autoComplete="off"
             placeholder="Leave empty for a local development server"
           />
+          <p className="text-muted mt-1 text-xs">
+            The shared key, a scoped key (iops_…) or a single sign-on access token.
+          </p>
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="remember" defaultChecked={settings.remember} className="accent-brand size-4" />
@@ -106,6 +116,12 @@ export function SettingsPage() {
           {verified && (
             <span className="text-ok inline-flex items-center gap-1 text-sm">
               <CheckCircle2 className="size-4" aria-hidden /> Connected
+            </span>
+          )}
+          {verified && me && (
+            <span className="text-muted text-sm">
+              as <span className="text-fg font-mono">{me.actor}</span> ({me.roles.join(", ") || "no roles"}) in{" "}
+              <span className="text-fg font-mono">{me.tenant}</span>
             </span>
           )}
         </div>

@@ -16,7 +16,7 @@ COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 COPY --from=web /app/src/incidentops/static ./src/incidentops/static
 COPY runbooks ./runbooks
-RUN pip install --no-cache-dir ".[postgres,redis]"
+RUN pip install --no-cache-dir ".[llm,postgres,redis,metrics,oidc]"
 
 RUN useradd --create-home appuser && mkdir -p /app/.data && chown -R appuser:appuser /app
 USER appuser
@@ -24,4 +24,5 @@ USER appuser
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \
   CMD python -c "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=3)"
-CMD ["uvicorn", "incidentops.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+# --timeout-graceful-shutdown: a rolling restart must not wait forever on an open live-event stream.
+CMD ["uvicorn", "incidentops.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "10"]

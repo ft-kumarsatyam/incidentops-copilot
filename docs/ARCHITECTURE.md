@@ -146,6 +146,18 @@ seconds. The bus is in-process. See
 [ADR 004](adr/004-sse-over-websocket.md) and [DEPLOYMENT.md](DEPLOYMENT.md) for
 running more than one instance.
 
+## Async execution
+
+With `EXECUTION_MODE=async`, `POST /incidents` redacts the report, stores the run as `queued`
+(`insert_new`, so a duplicate start is a no-op), enqueues one job and returns `202`. A worker
+(in-process threads or `incidentops worker`) claims the job with a leased, atomic update,
+moves the run `queued -> running`, and invokes the graph. If the run already has an unsettled
+LangGraph checkpoint (a previous worker died), it resumes with `invoke(None)` instead of starting
+over. The lease is renewed by a heartbeat; when it expires the job is reclaimed. Failures retry with
+exponential backoff and end in a `dead` job and an `errored` incident that a human can re-queue.
+Status changes go through the same event bus, so Redis carries them from workers to the API's
+SSE clients.
+
 ## Runbook retrieval
 
 `incidentops runbooks index` chunks Markdown by heading into an SQLite FTS5
@@ -156,6 +168,16 @@ actions cite them. FTS5 is the default backend; optional hybrid mode stores loca
 embeddings in the same SQLite file and reranks FTS candidates
 (`RUNBOOK_RETRIEVAL=hybrid`, `[rag]` extra). See [ADR 007](adr/007-hybrid-runbook-retrieval.md)
 and `make eval-retrieval`.
+
+## Identity, tenants and audit
+
+Every request resolves to a `Principal` (subject, audit actor, tenant, roles) through OIDC, a
+scoped key or the legacy shared key. Routes declare the permission they need; the service never
+sees raw credentials. The tenant is applied in the repository (`get`, `search`, audit reads all
+take it), so a route that forgot to filter still cannot return another tenant's rows. The audit log
+is a per-tenant SHA-256 chain whose head row is locked on append, so replicas serialise writes and
+`verify` can prove nothing was edited, removed or reordered. See
+[ADR 010](adr/010-identity-and-governance.md).
 
 ## Failure behavior
 
@@ -170,6 +192,8 @@ and `make eval-retrieval`.
 | Double approval | Second caller gets `409` |
 | n8n unavailable | Retries with backoff, then `failed` and a retry button; no direct write |
 | Process restart | Resume from the SQLite checkpoint |
+| Worker dies mid-run (async) | Lease expires, another worker resumes from the checkpoint; no duplicate dispatch |
+| Analysis fails or exceeds `RUN_TIMEOUT_SECONDS` (async) | Retried with backoff, then `errored` with a retry button |
 
 ## Security summary
 

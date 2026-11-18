@@ -2,20 +2,31 @@
 
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Path, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from incidentops.api.deps import authenticate, get_actor, get_service, verify_inbound_signature
+from incidentops.api.deps import (
+    get_service,
+    get_settings,
+    require,
+    verify_inbound_signature,
+)
 from incidentops.api.events import event_stream
-from incidentops.workflows.incident.service import IncidentService
+from incidentops.core.config import Settings
+from incidentops.security import Principal
+from incidentops.workflows.incident.service import IN_PROGRESS, IncidentService
 
 RUN_ID = r"^[A-Za-z0-9._:-]{1,128}$"
 Symptom = Annotated[str, StringConstraints(max_length=500)]
 
-router = APIRouter(prefix="/incidents", tags=["incidents"], dependencies=[Depends(authenticate)])
+router = APIRouter(prefix="/incidents", tags=["incidents"])
 Service = Annotated[IncidentService, Depends(get_service)]
-Actor = Annotated[str, Depends(get_actor)]
+# Each route names the permission it needs; the dependency authenticates and enforces it.
+Reader = Annotated[Principal, Depends(require("incident:read"))]
+Creator = Annotated[Principal, Depends(require("incident:create"))]
+Retrier = Annotated[Principal, Depends(require("incident:retry"))]
+Approver = Annotated[Principal, Depends(require("incident:decide"))]
 RunIdPath = Annotated[str, Path(pattern=RUN_ID)]
 
 
@@ -90,56 +101,129 @@ class AuditEntry(BaseModel):
 @router.get("", response_model=list[IncidentOut])
 def list_incidents(
     service: Service,
+    principal: Reader,
     response: Response,
     status: Annotated[list[str] | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[dict[str, Any]]:
-    items, total = service.search(statuses=status, query=q, limit=limit, offset=offset)
+    items, total = service.search(
+        statuses=status, query=q, limit=limit, offset=offset, tenant=principal.tenant
+    )
     response.headers["X-Total-Count"] = str(total)
     return items
 
 
-@router.post("", response_model=IncidentOut, dependencies=[Depends(verify_inbound_signature)])
-def create_incident(request: IncidentRequest, service: Service, actor: Actor) -> dict[str, Any]:
-    return service.start(request.model_dump(exclude_none=True), actor=actor)
+def _wait_seconds(prefer: str | None, ceiling: float) -> float:
+    """Seconds asked for by ``Prefer: wait=N`` (RFC 7240), capped. 0 when absent or malformed."""
+    for token in (prefer or "").split(","):
+        name, _, value = token.strip().partition("=")
+        if name.strip().lower() == "wait":
+            try:
+                return max(0.0, min(float(value.strip().strip('"')), ceiling))
+            except ValueError:
+                return 0.0
+    return 0.0
+
+
+@router.post(
+    "",
+    response_model=IncidentOut,
+    dependencies=[Depends(verify_inbound_signature)],
+    responses={
+        202: {
+            "model": IncidentOut,
+            "description": "Queued for analysis (EXECUTION_MODE=async). Poll GET /incidents/{id}"
+            " or watch /incidents/stream. Send `Prefer: wait=N` to wait for the result.",
+        }
+    },
+)
+def create_incident(
+    request: IncidentRequest,
+    service: Service,
+    principal: Creator,
+    settings: Annotated[Settings, Depends(get_settings)],
+    response: Response,
+    prefer: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    state = service.create(
+        request.model_dump(exclude_none=True), actor=principal.actor, tenant=principal.tenant
+    )
+    if state.get("status") in IN_PROGRESS:
+        wait = _wait_seconds(prefer, settings.max_wait_seconds)
+        if wait:
+            state = service.wait_for(state["run_id"], wait, tenant=principal.tenant)
+        if state.get("status") in IN_PROGRESS:
+            response.status_code = 202
+            response.headers["Location"] = f"/incidents/{state['run_id']}"
+            response.headers["Retry-After"] = "2"
+    return state
 
 
 @router.get("/stream", response_class=StreamingResponse)
-async def stream(request: Request, service: Service) -> StreamingResponse:
-    """Server-Sent Events: one `incident` event whenever any run changes."""
+async def stream(request: Request, service: Service, principal: Reader) -> StreamingResponse:
+    """Server-Sent Events: one `incident` event whenever one of your runs changes."""
     return StreamingResponse(
-        event_stream(service.events, request.is_disconnected),
+        event_stream(
+            service.events,
+            request.is_disconnected,
+            accept=lambda event: event.get("tenant") == principal.tenant,
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
 @router.get("/{run_id}", response_model=IncidentOut)
-def get_incident(run_id: RunIdPath, service: Service) -> dict[str, Any]:
-    return service.get(run_id)
+def get_incident(
+    run_id: RunIdPath,
+    service: Service,
+    principal: Reader,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    state = service.get(run_id, principal.tenant)
+    if settings.audit_reads:
+        service.repo.add_audit(run_id, "read", principal.actor)
+    return state
 
 
 @router.get("/{run_id}/audit", response_model=list[AuditEntry])
-def get_audit(run_id: RunIdPath, service: Service) -> list[dict[str, Any]]:
-    service.get(run_id)
-    return service.audit(run_id)
+def get_audit(run_id: RunIdPath, service: Service, principal: Reader) -> list[dict[str, Any]]:
+    service.get(run_id, principal.tenant)
+    return service.audit(run_id, principal.tenant)
 
 
 @router.post("/{run_id}/decision", response_model=IncidentOut)
 def decide(
-    run_id: RunIdPath, request: DecisionRequest, service: Service, actor: Actor
+    run_id: RunIdPath, request: DecisionRequest, service: Service, principal: Approver
 ) -> dict[str, Any]:
     return service.decide(
         run_id,
         request.idempotency_key,
         request.decision,
         approved_actions=request.approved_actions,
-        actor=actor,
+        principal=principal,
     )
 
 
 @router.post("/{run_id}/retry-dispatch", response_model=IncidentOut)
-def retry_dispatch(run_id: RunIdPath, service: Service, actor: Actor) -> dict[str, Any]:
-    return service.retry_dispatch(run_id, actor=actor)
+def retry_dispatch(run_id: RunIdPath, service: Service, principal: Retrier) -> dict[str, Any]:
+    return service.retry_dispatch(run_id, actor=principal.actor, tenant=principal.tenant)
+
+
+@router.post("/{run_id}/retry-run", response_model=IncidentOut)
+def retry_run(run_id: RunIdPath, service: Service, principal: Retrier) -> dict[str, Any]:
+    """Re-queue a run whose analysis failed (status ``errored``) with a fresh set of attempts."""
+    return service.retry_run(run_id, actor=principal.actor, tenant=principal.tenant)
+
+
+queue_router = APIRouter(tags=["queue"])
+
+
+@queue_router.get("/queue")
+def queue_status(
+    service: Service, principal: Annotated[Principal, Depends(require("queue:read"))]
+) -> dict[str, Any]:
+    """Job counts, the age of the oldest waiting job, and your recently dead-lettered jobs."""
+    return service.queue_stats(principal.tenant)

@@ -130,22 +130,25 @@ class TestVerifyActionTokenCode:
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 def test_idempotency_gate_allows_a_retry_until_the_action_is_done() -> None:
-    """Run the real gate and done-marker JavaScript against shared static data."""
+    """Run the real gate and done-marker JavaScript (static-data mode, no Redis configured)."""
     nodes = _nodes()
     harness = textwrap.dedent(
         """
         const [gateCode, doneCode, body] = JSON.parse(process.argv[1]);
+        const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
         const store = {};
-        const gate = () => new Function('$json', '$getWorkflowStaticData', gateCode)(
-          { body }, () => store)[0].json;
-        const done = () => new Function('$', '$getWorkflowStaticData', doneCode)(
-          () => ({ first: () => ({ json: body }) }), () => store);
-        const out = [];
-        out.push(gate().execute);   // first delivery
-        out.push(gate().execute);   // retry after a failed issue call
-        done();
-        out.push(gate().execute);   // duplicate after success
-        console.log(JSON.stringify(out));
+        const gateFn = new AsyncFunction('$json', '$env', '$getWorkflowStaticData', gateCode);
+        const gate = async () => (await gateFn({ body }, {}, () => store))[0].json;
+        const done = () => new AsyncFunction('$', '$env', '$getWorkflowStaticData', doneCode)(
+          () => ({ first: () => ({ json: { ...body, store: 'static' } }) }), {}, () => store);
+        (async () => {
+          const out = [];
+          out.push((await gate()).execute);   // first delivery
+          out.push((await gate()).execute);   // retry after a failed issue call
+          await done();
+          out.push((await gate()).execute);   // duplicate after success
+          console.log(JSON.stringify(out));
+        })();
         """
     )
     result = subprocess.run(

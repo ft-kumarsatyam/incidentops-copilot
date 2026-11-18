@@ -1,5 +1,5 @@
 import { getSettings } from "./settings";
-import type { AuditEntry, Decision, Incident, NewIncident } from "./types";
+import type { AuditEntry, Decision, Incident, Me, NewIncident } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -11,10 +11,20 @@ export class ApiError extends Error {
   }
 }
 
+/** Scoped keys (iops_...) and SSO access tokens (JWTs) go in `Authorization: Bearer`; the
+ * legacy shared key stays in `X-API-Key`. */
+export function isBearerCredential(credential: string): boolean {
+  return credential.startsWith("iops_") || /^eyJ[\w-]+\.[\w-]+\.[\w-]*$/.test(credential);
+}
+
 export function authHeaders(): Record<string, string> {
   const { apiKey, actor } = getSettings();
   const headers: Record<string, string> = {};
-  if (apiKey) headers["X-API-Key"] = apiKey;
+  if (apiKey) {
+    if (isBearerCredential(apiKey)) headers["Authorization"] = `Bearer ${apiKey}`;
+    else headers["X-API-Key"] = apiKey;
+  }
+  // Named credentials carry their own identity, so the server ignores this label for them.
   if (actor) headers["X-Actor"] = actor;
   return headers;
 }
@@ -48,6 +58,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<{ data:
 }
 
 export const api = {
+  async me(): Promise<Me> {
+    return (await request<Me>("/me")).data;
+  },
   async list(limit = 200): Promise<Incident[]> {
     return (await request<Incident[]>(`/incidents?limit=${limit}`)).data;
   },
@@ -72,6 +85,13 @@ export const api = {
   async retryDispatch(runId: string): Promise<Incident> {
     return (
       await request<Incident>(`/incidents/${encodeURIComponent(runId)}/retry-dispatch`, {
+        method: "POST",
+      })
+    ).data;
+  },
+  async retryRun(runId: string): Promise<Incident> {
+    return (
+      await request<Incident>(`/incidents/${encodeURIComponent(runId)}/retry-run`, {
         method: "POST",
       })
     ).data;

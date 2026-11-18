@@ -54,7 +54,7 @@ flowchart TB
 
 **CLI:** `incidentops runbooks index` rebuilds the index (`make index`).
 
-**Config:** `RUNBOOK_RETRIEVAL=fts|hybrid` (`.env.example`).
+**Config:** `RUNBOOK_RETRIEVAL=fts|hybrid` and `RUNBOOK_STORE=sqlite|postgres` (`.env.example`).
 
 ## Code layout (`src/incidentops/rag/`)
 
@@ -63,6 +63,7 @@ flowchart TB
 | [`fts.py`](../src/incidentops/rag/fts.py) | Chunk MD by `##` headings; index `doc` (H1 + filename) for service match; BM25 + `prefer` boost |
 | [`rewrite.py`](../src/incidentops/rag/rewrite.py) | Service aliases + symptom phrase → expanded BM25 query (deterministic) |
 | [`hybrid.py`](../src/incidentops/rag/hybrid.py) | `fastembed` vectors in SQLite; FTS top-20 → cosine rerank + service boost |
+| [`pgvector.py`](../src/incidentops/rag/pgvector.py) | The shared Postgres store: `tsvector` + GIN, `vector(384)` + HNSW, advisory-locked hash-skipped reindex |
 | [`retriever.py`](../src/incidentops/rag/retriever.py) | `RunbookRetriever` protocol; `build_runbook_retriever(settings)` |
 
 Integrations (GitHub, monitoring) stay in `tools/`; **knowledge retrieval is its own package**.
@@ -96,6 +97,20 @@ When `RUNBOOK_RETRIEVAL=hybrid` and `pip install '.[rag]'`:
 vectors. Hybrid is there to show you know the pattern and to scale up later.
 See [ADR 007](adr/007-hybrid-runbook-retrieval.md).
 
+## Shared store: Postgres + pgvector (`RUNBOOK_STORE=postgres`)
+
+The SQLite index is a file, so each replica has its own. With `RUNBOOK_STORE=postgres` all replicas
+search one index in `DATABASE_URL`:
+
+- `runbook_chunks` holds the chunks, a generated `tsvector` (same weights as the SQLite index) with
+  a GIN index, and in hybrid mode a `vector(384)` with an HNSW cosine index.
+- Hybrid is **not** a rerank here. It takes the 20 nearest neighbours *and* the 20 best full-text
+  matches, then scores with the same `0.55·dense + 0.35·fts_rank + 0.10·prefer` weights. A chunk
+  that full-text search misses can still win on meaning; the SQLite hybrid only sees FTS candidates
+  (plus a full-corpus fallback when FTS finds nothing).
+- Reindexing hashes the corpus and the embedding model, skips when unchanged, and rewrites under an
+  advisory lock, so replicas starting together do not race.
+
 ## Evaluation (proof, not vibes)
 
 | Artifact | Command |
@@ -111,8 +126,12 @@ See [ADR 007](adr/007-hybrid-runbook-retrieval.md).
 | Raw FTS | ~82% (11 cases) | Vocabulary mismatch on semantic symptom phrasing |
 | FTS + rewrite | 100% | **Shipping default** |
 | Hybrid + rewrite | 100% | Optional; proves dense path |
+| Postgres FTS (`pg-fts`) | 100% | Same ranking contract on the shared store |
+| Postgres + pgvector (`pgvector`) | 100% | Shared store with HNSW candidates |
 
-CI runs `fts` + `rewrite` on every PR (no `fastembed` required).
+CI runs all of these on every PR against a `pgvector/pgvector:pg17` service container. The 11 cases
+are small enough that the eval cannot tell the stores apart on recall; the difference it guards is
+that the shared store keeps pace with the file-backed one.
 
 ## Interview sound bites
 

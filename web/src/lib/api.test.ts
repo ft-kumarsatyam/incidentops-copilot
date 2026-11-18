@@ -22,6 +22,28 @@ describe("api client", () => {
     expect(init.headers).toMatchObject({ "X-API-Key": "secret", "X-Actor": "Ana" });
   });
 
+  it.each([
+    ["iops_0123456789ab_secretvalue", "scoped key"],
+    ["eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1In0.c2ln", "SSO token"],
+  ])("sends a %2$s as a bearer token, not as the shared key", async (credential) => {
+    saveSettings({ apiKey: credential, actor: "", remember: false });
+    const fetchMock = vi.fn(async () => json([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.list();
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.headers).toMatchObject({ Authorization: `Bearer ${credential}` });
+    expect(init.headers).not.toHaveProperty("X-API-Key");
+  });
+
+  it("reads who the server thinks you are", async () => {
+    const me = { subject: "s", actor: "ana", tenant: "acme", roles: ["viewer"], method: "oidc", permissions: [] };
+    vi.stubGlobal("fetch", vi.fn(async () => json(me)));
+
+    expect(await api.me()).toEqual(me);
+  });
+
   it("omits auth headers when no key is configured", async () => {
     const fetchMock = vi.fn(async () => json([]));
     vi.stubGlobal("fetch", fetchMock);

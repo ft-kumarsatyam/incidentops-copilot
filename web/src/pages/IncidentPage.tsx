@@ -8,7 +8,7 @@ import { EvidencePanel } from "../components/EvidencePanel";
 import { Pipeline } from "../components/Pipeline";
 import { QueryError } from "../components/QueryError";
 import { Skeleton } from "../components/States";
-import { useAudit, useDecide, useIncident, useRetryDispatch } from "../hooks/useIncidents";
+import { useAudit, useCan, useDecide, useIncident, useRetryDispatch, useRetryRun } from "../hooks/useIncidents";
 import { useToast } from "../hooks/useToast";
 import { humanizeTimeline, relativeTime } from "../lib/format";
 import type { AuditEntry, Decision, Incident } from "../lib/types";
@@ -70,6 +70,8 @@ export function IncidentPage() {
   const toast = useToast();
   const decide = useDecide(incident ?? ({ run_id: runId, idempotency_key: "" } as Incident));
   const retry = useRetryDispatch(runId);
+  const retryRun = useRetryRun(runId);
+  const can = useCan();
 
   const onDecide = async (decision: Decision) => {
     try {
@@ -123,27 +125,59 @@ export function IncidentPage() {
       </div>
 
       {incident.status === "awaiting_approval" && (
-        <ApprovalPanel key={incident.run_id} incident={incident} busy={decide.isPending} onDecide={onDecide} />
+        <ApprovalPanel
+          key={incident.run_id}
+          incident={incident}
+          busy={decide.isPending}
+          onDecide={onDecide}
+          canDecide={can("incident:decide")}
+        />
       )}
       {incident.status === "needs_human" && <WhyHuman incident={incident} />}
+      {incident.status === "errored" && (
+        <div role="alert" className="bg-dangerbg text-danger rounded-xl p-4">
+          <p className="font-semibold">The analysis could not be completed</p>
+          <p className="mt-1 text-sm">
+            It failed after several tries{incident.error ? `: ${incident.error}` : "."} Nothing was changed.
+          </p>
+          {can("incident:retry") && (
+            <button
+              type="button"
+              disabled={retryRun.isPending}
+              onClick={() =>
+                retryRun.mutate(undefined, {
+                  onSuccess: () => toast("success", "Analysis queued again."),
+                  onError: (failure) => toast("error", failure.message),
+                })
+              }
+              className="mt-3 inline-flex items-center gap-2 rounded-lg border border-current px-3 py-1.5 text-sm font-semibold disabled:opacity-60"
+            >
+              {retryRun.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RotateCcw className="size-4" aria-hidden />}
+              Retry analysis
+            </button>
+          )}
+        </div>
+      )}
       {incident.status === "failed" && (
         <div role="alert" className="bg-dangerbg text-danger rounded-xl p-4">
           <p className="font-semibold">Approved, but the actions could not be sent</p>
           <p className="mt-1 text-sm">The automation service did not respond. Nothing was changed.</p>
-          <button
-            type="button"
-            disabled={retry.isPending}
-            onClick={() =>
-              retry.mutate(undefined, {
-                onSuccess: () => toast("success", "Actions handed off."),
-                onError: (failure) => toast("error", failure.message),
-              })
-            }
-            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-current px-3 py-1.5 text-sm font-semibold disabled:opacity-60"
-          >
-            {retry.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RotateCcw className="size-4" aria-hidden />}
-            Retry hand-off
-          </button>
+          {can("incident:retry") && (
+            <button
+              type="button"
+              disabled={retry.isPending}
+              onClick={() =>
+                retry.mutate(undefined, {
+                  onSuccess: () => toast("success", "Actions handed off."),
+                  onError: (failure) => toast("error", failure.message),
+                })
+              }
+              className="mt-3 inline-flex items-center gap-2 rounded-lg border border-current px-3 py-1.5 text-sm font-semibold disabled:opacity-60"
+            >
+              {retry.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RotateCcw className="size-4" aria-hidden />}
+              Retry hand-off
+            </button>
+          )}
         </div>
       )}
 

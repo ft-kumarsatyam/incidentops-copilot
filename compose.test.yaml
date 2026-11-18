@@ -1,11 +1,12 @@
 # Throwaway Postgres and Redis for the test suite. `make test`, `make cov` and `make check`
 # start these automatically; `make test-services-down` stops and wipes them.
+# Postgres ships the pgvector extension so the shared runbook index can be tested.
 # Bound to localhost on unusual ports so they never collide with a real database or Redis.
 name: incidentops-test
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_PASSWORD: test
     command: ["postgres", "-c", "fsync=off", "-c", "synchronous_commit=off"]

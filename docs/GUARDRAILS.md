@@ -8,7 +8,7 @@ deliberately not covered.
 
 | # | Layer | Where | What it enforces |
 |---|---|---|---|
-| 0 | API boundary | `api/` | API key (constant-time compare), 256 KB body cap, rate limit, field length caps (summary 2000, symptom 500 each, 20 symptoms, 50 keys per dict), `run_id` pattern, sanitized `X-Actor` |
+| 0 | API boundary | `api/` | Credential (SSO token, scoped key or shared key; constant-time compare), per-route role check, tenant scoping, 256 KB body cap, rate limit, field length caps (summary 2000, symptom 500 each, 20 symptoms, 50 keys per dict), `run_id` pattern, actor taken from the verified identity (`X-Actor` only for the shared key, sanitized) |
 | 1 | Ingress | `core/redact.py`, `tools/monitoring.py`, `tools/github.py` | Secret and PII redaction before storage or model. Monitoring and GitHub payloads are allowlisted and scalar-only. `error_rate` is parsed strictly; an unusable value marks impact **unverified** rather than healthy. `repo` must be `owner/name` before it reaches an API URL. |
 | 2 | Injection scan | `agents/guardrails.py` `injection_signals` | NFKC, zero-width and case folding, then 14 hostile-instruction patterns over every untrusted field. Result is `guardrail_flags` on the run and a timeline entry, and is passed to the model. Flagged, not blocked. |
 | 3 | Model call | `agents/claude.py` | Incident text fenced as untrusted data, closed action enum, structured output, timeouts, token cap. Refusal, truncation and malformed output become `ProviderError`. |

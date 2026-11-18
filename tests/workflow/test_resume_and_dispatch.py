@@ -178,6 +178,7 @@ def test_service_publishes_an_event_whenever_a_run_changes(service: IncidentServ
         "type": "incident",
         "run_id": payload["run_id"],
         "status": "awaiting_approval",
+        "tenant": "default",
     }
     assert seen[-1]["status"] == "succeeded"
     assert {event["run_id"] for event in seen} == {payload["run_id"]}

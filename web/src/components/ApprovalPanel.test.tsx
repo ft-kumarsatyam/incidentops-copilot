@@ -61,4 +61,21 @@ describe("ApprovalPanel", () => {
 
     expect(onDecide).not.toHaveBeenCalled();
   });
+
+  it("shows the proposal but no decision buttons to someone who may not approve", () => {
+    render(<ApprovalPanel incident={incident()} busy={false} onDecide={vi.fn()} canDecide={false} />);
+
+    expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reject/i })).not.toBeInTheDocument();
+    screen.getAllByRole("checkbox").forEach((box) => expect(box).toBeDisabled());
+    expect(screen.getByText(/waiting for someone with approval rights/i)).toBeInTheDocument();
+  });
+
+  it("says how many different approvers are still needed", () => {
+    const needsTwo = incident({ approval_progress: { required: 2, approved_by: ["raj"] } });
+    render(<ApprovalPanel incident={needsTwo} busy={false} onDecide={vi.fn()} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(/2 different approvers/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/1 of 2 have approved \(raj\)/i);
+  });
 });

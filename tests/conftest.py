@@ -105,3 +105,17 @@ def redis_prefix() -> str:
     import uuid
 
     return f"t{uuid.uuid4().hex[:10]}"
+
+
+@pytest.fixture(params=["sqlite", "postgres"])
+def repo(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[Any]:
+    """The incident repo on SQLite and on Postgres (when TEST_DATABASE_URL is set)."""
+    from incidentops.persistence.postgres import PostgresIncidentRepo, open_pool
+    from incidentops.persistence.repo import IncidentRepo
+
+    if request.param == "sqlite":
+        yield IncidentRepo(tmp_path / "db.sqlite")
+        return
+    postgres = PostgresIncidentRepo(open_pool(request.getfixturevalue("pg_url"), max_size=8))
+    yield postgres
+    postgres.close()

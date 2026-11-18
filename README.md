@@ -445,7 +445,7 @@ is a demo-only claim.
 | Incidents | `make eval` | **37 of 37** pass: 10 core cases plus 27 edge cases covering severity, missing facts, conflicts, runbook choice, grounding, safety and prompt injection ([report](evals/report.md)) |
 | Guardrails | `make eval-guardrails` | **152 of 152** hostile outputs blocked, **29 of 29** benign outputs kept, 19 of 19 property checks ([report](evals/guardrail_report.md)) |
 | Retrieval | `make eval-retrieval` | Recall@k: raw FTS 81.8%, with query rewrite **100%**, hybrid 100% ([report](evals/retrieval_report.md)) |
-| Load | `make loadtest` | p95 per replica count, with errors, Postgres CPU and what the database waited on: 1 → 4 replicas gave about ×1.2 on a 2-CPU Postgres, limited by commit flushes and the audit-chain lock ([report](evals/loadtest_report.md)) |
+| Load | `make loadtest` | p95 per replica count and checkpoint mode. `CHECKPOINT_DURABILITY=exit` ran about 1.5× faster than the default at the same replica count; extra replicas added little, and the audit-chain lock was the largest database wait ([report](evals/loadtest_report.md)) |
 | Architecture | `make eval-architecture` | Single-agent graph vs parallel specialists ([report](evals/architecture_report.md)) |
 
 `make eval-claude` runs the incident suite against Claude when you have a key
@@ -550,6 +550,7 @@ Copy [.env.example](.env.example). The settings you will touch most:
 | `RUNBOOK_STORE` | `sqlite` | `postgres` keeps one shared runbook index in `DATABASE_URL` (full-text search; with `hybrid`, pgvector). Needs a Postgres with the pgvector extension for hybrid |
 | `CONFIDENCE_THRESHOLD` | `0.8` | Below this, the run goes to a human instead of approval |
 | `MAX_RESEARCH_ATTEMPTS` | `2` | Bound on the critic-to-research loop |
+| `CHECKPOINT_DURABILITY` | `async` | `exit` saves workflow checkpoints only when a run finishes or pauses, cutting database commits per incident; a worker that dies mid-run then restarts that run from the beginning ([load test](evals/loadtest_report.md)) |
 | `ACTION_PROVIDER` | `n8n` | Approved-action dispatcher: `n8n` or `zapier` |
 | `N8N_ACTION_WEBHOOK_URL` / `N8N_ACTION_TOKEN` | | Where approved actions go, and the shared secret n8n checks |
 | `ZAPIER_ACTION_WEBHOOK_URL` / `ZAPIER_ACTION_TOKEN` | | Zapier Catch Hook URL and optional token |
@@ -650,7 +651,7 @@ controls.
 - [x] n8n idempotency gate on Redis `SET NX`, shared by several n8n instances ([n8n/README.md](n8n/README.md#idempotency))
 - [x] Shared runbook index in Postgres, with pgvector for hybrid retrieval (`RUNBOOK_STORE=postgres`, [ADR 007](docs/adr/007-hybrid-runbook-retrieval.md))
 - [x] Load-test result per replica count next to the evals ([report](evals/loadtest_report.md))
-- [ ] Shorten the per-tenant audit-chain critical section (the load test shows it as a shared limit)
+- [ ] Lift the per-tenant audit-chain ceiling: it is commit-bound, so it needs batched or asynchronously sealed chaining (trimming the lock's statements and sharing commits within a process both measured no gain, because the contention is between replicas)
 - [ ] Jira action node, richer monitoring connectors
 
 ## 🤝 Community and contributing

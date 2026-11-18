@@ -1,183 +1,263 @@
 [
   {
     "seconds": 30.0,
-    "incidents": 1554,
+    "incidents": 1101,
     "errors": 0,
     "first_error": "",
-    "incidents_per_second": 51.8,
+    "incidents_per_second": 36.7,
     "create": {
-      "p50": 167.2,
-      "p95": 195.6,
-      "p99": 224.7,
-      "max": 282.1
+      "p50": 204.9,
+      "p95": 451.2,
+      "p99": 648.7,
+      "max": 896.5
     },
     "decide": {
-      "p50": 139.6,
-      "p95": 175.7,
-      "p99": 230.7,
-      "max": 266.7
+      "p50": 174.2,
+      "p95": 375.9,
+      "p99": 635.2,
+      "max": 900.1
     },
     "incident": {
-      "p50": 304.0,
-      "p95": 350.6,
-      "p99": 403.0,
-      "max": 465.6
+      "p50": 381.4,
+      "p95": 823.9,
+      "p99": 1063.6,
+      "max": 1226.7
     },
     "users": 16,
     "replicas": 1,
-    "postgres_cpu_percent": 48,
+    "postgres_cpu_percent": 55,
     "db_waits": {
-      "waiting for the API (idle between statements)": 103,
-      "audit chain head row lock": 19,
-      "WAL flush (commit durability)": 37,
-      "IO:DataFileExtend": 1
+      "waiting for the API (idle between statements)": 100,
+      "WAL flush (commit durability)": 31,
+      "audit chain head row lock": 20
     },
-    "db_commits_per_incident": 37.8,
-    "db_inserts_per_incident": 101.7
+    "db_commits_per_incident": 37.0,
+    "db_inserts_per_incident": 99.6,
+    "durability": "async"
   },
   {
     "seconds": 30.0,
-    "incidents": 1460,
+    "incidents": 1216,
     "errors": 0,
     "first_error": "",
-    "incidents_per_second": 48.67,
+    "incidents_per_second": 40.53,
     "create": {
-      "p50": 729.2,
-      "p95": 866.9,
-      "p99": 1073.3,
-      "max": 1127.4
+      "p50": 864.7,
+      "p95": 1136.1,
+      "p99": 1212.7,
+      "max": 1399.2
     },
     "decide": {
-      "p50": 615.6,
-      "p95": 745.7,
-      "p99": 899.0,
-      "max": 933.8
+      "p50": 727.4,
+      "p95": 1009.7,
+      "p99": 1156.8,
+      "max": 1235.8
     },
     "incident": {
-      "p50": 1331.1,
-      "p95": 1501.1,
-      "p99": 1577.6,
-      "max": 1918.1
+      "p50": 1572.7,
+      "p95": 2099.0,
+      "p99": 2252.2,
+      "max": 2383.0
     },
     "users": 64,
     "replicas": 1,
-    "postgres_cpu_percent": 46,
+    "postgres_cpu_percent": 45,
     "db_waits": {
-      "WAL flush (commit durability)": 40,
-      "waiting for the API (idle between statements)": 84,
-      "audit chain head row lock": 9,
-      "Timeout:VacuumDelay": 19
-    },
-    "db_commits_per_incident": 36.6,
-    "db_inserts_per_incident": 99.3
-  },
-  {
-    "seconds": 30.0,
-    "incidents": 1609,
-    "errors": 0,
-    "first_error": "",
-    "incidents_per_second": 53.63,
-    "create": {
-      "p50": 206.4,
-      "p95": 254.0,
-      "p99": 318.0,
-      "max": 494.5
-    },
-    "decide": {
-      "p50": 125.0,
-      "p95": 159.4,
-      "p99": 177.9,
-      "max": 359.8
-    },
-    "incident": {
-      "p50": 331.2,
-      "p95": 401.2,
-      "p99": 457.5,
-      "max": 582.1
-    },
-    "users": 16,
-    "replicas": 2,
-    "postgres_cpu_percent": 58,
-    "db_waits": {
-      "audit chain head row lock": 64,
-      "WAL flush (commit durability)": 47,
-      "waiting for the API (idle between statements)": 125
-    },
-    "db_commits_per_incident": 37.6,
-    "db_inserts_per_incident": 100.9
-  },
-  {
-    "seconds": 30.0,
-    "incidents": 1659,
-    "errors": 0,
-    "first_error": "",
-    "incidents_per_second": 55.3,
-    "create": {
-      "p50": 991.7,
-      "p95": 1211.7,
-      "p99": 1299.8,
-      "max": 1745.6
-    },
-    "decide": {
-      "p50": 169.9,
-      "p95": 399.2,
-      "p99": 508.8,
-      "max": 616.2
-    },
-    "incident": {
-      "p50": 1165.7,
-      "p95": 1468.4,
-      "p99": 1630.9,
-      "max": 1941.8
-    },
-    "users": 64,
-    "replicas": 2,
-    "postgres_cpu_percent": 67,
-    "db_waits": {
-      "waiting for the API (idle between statements)": 151,
-      "audit chain head row lock": 85,
-      "WAL flush (commit durability)": 80
+      "WAL flush (commit durability)": 35,
+      "waiting for the API (idle between statements)": 91,
+      "audit chain head row lock": 8,
+      "IO:DataFileExtend": 1,
+      "Timeout:VacuumDelay": 6,
+      "LWLock:ProcArray": 1
     },
     "db_commits_per_incident": 36.9,
-    "db_inserts_per_incident": 100.2
+    "db_inserts_per_incident": 99.3,
+    "durability": "async"
   },
   {
     "seconds": 30.0,
-    "incidents": 1848,
+    "incidents": 1200,
     "errors": 0,
     "first_error": "",
-    "incidents_per_second": 61.6,
+    "incidents_per_second": 40.0,
     "create": {
-      "p50": 170.3,
-      "p95": 233.4,
-      "p99": 294.5,
-      "max": 508.3
+      "p50": 259.3,
+      "p95": 383.7,
+      "p99": 554.8,
+      "max": 574.6
     },
     "decide": {
-      "p50": 99.2,
-      "p95": 156.3,
-      "p99": 268.7,
-      "max": 549.7
+      "p50": 156.5,
+      "p95": 245.1,
+      "p99": 425.1,
+      "max": 590.9
     },
     "incident": {
-      "p50": 267.2,
-      "p95": 367.2,
-      "p99": 456.7,
-      "max": 744.6
+      "p50": 416.8,
+      "p95": 614.8,
+      "p99": 812.7,
+      "max": 984.4
+    },
+    "users": 16,
+    "replicas": 2,
+    "postgres_cpu_percent": 60,
+    "db_waits": {
+      "waiting for the API (idle between statements)": 108,
+      "audit chain head row lock": 75,
+      "WAL flush (commit durability)": 58
+    },
+    "db_commits_per_incident": 37.3,
+    "db_inserts_per_incident": 100.5,
+    "durability": "async"
+  },
+  {
+    "seconds": 30.0,
+    "incidents": 1045,
+    "errors": 0,
+    "first_error": "",
+    "incidents_per_second": 34.83,
+    "create": {
+      "p50": 1418.1,
+      "p95": 2602.2,
+      "p99": 2905.3,
+      "max": 3139.4
+    },
+    "decide": {
+      "p50": 275.2,
+      "p95": 806.7,
+      "p99": 995.9,
+      "max": 1051.6
+    },
+    "incident": {
+      "p50": 1702.9,
+      "p95": 2993.2,
+      "p99": 3593.7,
+      "max": 3885.3
+    },
+    "users": 64,
+    "replicas": 2,
+    "postgres_cpu_percent": 65,
+    "db_waits": {
+      "waiting for the API (idle between statements)": 140,
+      "WAL flush (commit durability)": 87,
+      "audit chain head row lock": 105
+    },
+    "db_commits_per_incident": 36.7,
+    "db_inserts_per_incident": 100.0,
+    "durability": "async"
+  },
+  {
+    "seconds": 30.0,
+    "incidents": 1333,
+    "errors": 0,
+    "first_error": "",
+    "incidents_per_second": 44.43,
+    "create": {
+      "p50": 231.9,
+      "p95": 337.3,
+      "p99": 373.7,
+      "max": 428.8
+    },
+    "decide": {
+      "p50": 134.5,
+      "p95": 236.4,
+      "p99": 305.8,
+      "max": 442.8
+    },
+    "incident": {
+      "p50": 362.5,
+      "p95": 532.9,
+      "p99": 617.0,
+      "max": 692.5
     },
     "users": 16,
     "replicas": 4,
-    "postgres_cpu_percent": 86,
+    "postgres_cpu_percent": 110,
     "db_waits": {
-      "audit chain head row lock": 361,
-      "waiting for the API (idle between statements)": 185,
-      "WAL flush (commit durability)": 186,
+      "WAL flush (commit durability)": 150,
+      "waiting for the API (idle between statements)": 180,
+      "audit chain head row lock": 330,
       "LWLock:LockManager": 1,
-      "IO:DataFileExtend": 1,
-      "Timeout:VacuumDelay": 4
+      "LWLock:ProcArray": 1,
+      "Timeout:VacuumDelay": 1
+    },
+    "db_commits_per_incident": 37.4,
+    "db_inserts_per_incident": 100.2,
+    "durability": "async"
+  },
+  {
+    "seconds": 30.0,
+    "incidents": 1202,
+    "errors": 0,
+    "first_error": "",
+    "incidents_per_second": 40.07,
+    "create": {
+      "p50": 1216.8,
+      "p95": 2275.4,
+      "p99": 2512.8,
+      "max": 2591.8
+    },
+    "decide": {
+      "p50": 179.6,
+      "p95": 1259.7,
+      "p99": 1567.6,
+      "max": 1857.0
+    },
+    "incident": {
+      "p50": 1516.0,
+      "p95": 2589.5,
+      "p99": 2804.2,
+      "max": 3095.1
+    },
+    "users": 64,
+    "replicas": 4,
+    "postgres_cpu_percent": 93,
+    "db_waits": {
+      "audit chain head row lock": 999,
+      "waiting for the API (idle between statements)": 189,
+      "WAL flush (commit durability)": 201,
+      "IO:DataFileExtend": 3
     },
     "db_commits_per_incident": 37.3,
-    "db_inserts_per_incident": 100.4
+    "db_inserts_per_incident": 100.3,
+    "durability": "async"
+  },
+  {
+    "seconds": 30.0,
+    "incidents": 1781,
+    "errors": 0,
+    "first_error": "",
+    "incidents_per_second": 59.37,
+    "create": {
+      "p50": 94.0,
+      "p95": 117.5,
+      "p99": 155.0,
+      "max": 225.1
+    },
+    "decide": {
+      "p50": 170.4,
+      "p95": 204.6,
+      "p99": 242.6,
+      "max": 364.5
+    },
+    "incident": {
+      "p50": 264.9,
+      "p95": 309.2,
+      "p99": 372.5,
+      "max": 473.7
+    },
+    "users": 16,
+    "replicas": 1,
+    "postgres_cpu_percent": 54,
+    "db_waits": {
+      "audit chain head row lock": 30,
+      "WAL flush (commit durability)": 42,
+      "waiting for the API (idle between statements)": 159,
+      "Timeout:VacuumDelay": 2
+    },
+    "db_commits_per_incident": 24.9,
+    "db_inserts_per_incident": 27.8,
+    "durability": "exit"
   },
   {
     "seconds": 30.0,
@@ -186,32 +266,192 @@
     "first_error": "",
     "incidents_per_second": 62.83,
     "create": {
-      "p50": 879.4,
-      "p95": 1263.0,
-      "p99": 1377.4,
-      "max": 1422.7
+      "p50": 415.8,
+      "p95": 499.4,
+      "p99": 536.8,
+      "max": 758.0
     },
     "decide": {
-      "p50": 72.3,
-      "p95": 487.2,
-      "p99": 685.1,
-      "max": 771.9
+      "p50": 613.5,
+      "p95": 716.8,
+      "p99": 766.2,
+      "max": 810.7
     },
     "incident": {
-      "p50": 1051.6,
-      "p95": 1387.1,
-      "p99": 1492.5,
-      "max": 1691.5
+      "p50": 1031.2,
+      "p95": 1142.8,
+      "p99": 1263.5,
+      "max": 1390.4
+    },
+    "users": 64,
+    "replicas": 1,
+    "postgres_cpu_percent": 54,
+    "db_waits": {
+      "waiting for the API (idle between statements)": 158,
+      "audit chain head row lock": 43,
+      "WAL flush (commit durability)": 51
+    },
+    "db_commits_per_incident": 24.8,
+    "db_inserts_per_incident": 27.7,
+    "durability": "exit"
+  },
+  {
+    "seconds": 30.0,
+    "incidents": 2205,
+    "errors": 0,
+    "first_error": "",
+    "incidents_per_second": 73.5,
+    "create": {
+      "p50": 55.7,
+      "p95": 108.5,
+      "p99": 154.7,
+      "max": 198.1
+    },
+    "decide": {
+      "p50": 153.8,
+      "p95": 191.4,
+      "p99": 317.4,
+      "max": 467.6
+    },
+    "incident": {
+      "p50": 213.3,
+      "p95": 281.7,
+      "p99": 389.1,
+      "max": 531.2
+    },
+    "users": 16,
+    "replicas": 2,
+    "postgres_cpu_percent": 78,
+    "db_waits": {
+      "audit chain head row lock": 167,
+      "waiting for the API (idle between statements)": 240,
+      "WAL flush (commit durability)": 71,
+      "other row locks": 1,
+      "IO:DataFileExtend": 1
+    },
+    "db_commits_per_incident": 25.2,
+    "db_inserts_per_incident": 28.1,
+    "durability": "exit"
+  },
+  {
+    "seconds": 30.0,
+    "incidents": 2048,
+    "errors": 0,
+    "first_error": "",
+    "incidents_per_second": 68.27,
+    "create": {
+      "p50": 170.0,
+      "p95": 904.9,
+      "p99": 1687.9,
+      "max": 4468.6
+    },
+    "decide": {
+      "p50": 665.5,
+      "p95": 994.6,
+      "p99": 1634.4,
+      "max": 3837.3
+    },
+    "incident": {
+      "p50": 845.5,
+      "p95": 1755.7,
+      "p99": 2633.5,
+      "max": 4945.3
+    },
+    "users": 64,
+    "replicas": 2,
+    "postgres_cpu_percent": 82,
+    "db_waits": {
+      "waiting for the API (idle between statements)": 215,
+      "WAL flush (commit durability)": 58,
+      "audit chain head row lock": 255,
+      "IO:DataFileExtend": 1,
+      "Timeout:VacuumDelay": 4,
+      "Timeout:VacuumTruncate": 1
+    },
+    "db_commits_per_incident": 24.9,
+    "db_inserts_per_incident": 27.8,
+    "durability": "exit"
+  },
+  {
+    "seconds": 30.0,
+    "incidents": 2326,
+    "errors": 0,
+    "first_error": "",
+    "incidents_per_second": 77.53,
+    "create": {
+      "p50": 75.9,
+      "p95": 121.9,
+      "p99": 180.1,
+      "max": 706.4
+    },
+    "decide": {
+      "p50": 116.4,
+      "p95": 188.2,
+      "p99": 271.6,
+      "max": 887.0
+    },
+    "incident": {
+      "p50": 195.5,
+      "p95": 283.1,
+      "p99": 433.4,
+      "max": 1135.1
+    },
+    "users": 16,
+    "replicas": 4,
+    "postgres_cpu_percent": 95,
+    "db_waits": {
+      "audit chain head row lock": 985,
+      "WAL flush (commit durability)": 118,
+      "waiting for the API (idle between statements)": 248,
+      "other row locks": 1,
+      "IO:DataFileExtend": 1,
+      "LWLock:ProcArray": 1,
+      "LWLock:LockManager": 2
+    },
+    "db_commits_per_incident": 25.4,
+    "db_inserts_per_incident": 28.4,
+    "durability": "exit"
+  },
+  {
+    "seconds": 30.0,
+    "incidents": 2056,
+    "errors": 0,
+    "first_error": "",
+    "incidents_per_second": 68.53,
+    "create": {
+      "p50": 176.9,
+      "p95": 561.0,
+      "p99": 795.5,
+      "max": 1044.3
+    },
+    "decide": {
+      "p50": 682.9,
+      "p95": 1227.6,
+      "p99": 1471.0,
+      "max": 1840.7
+    },
+    "incident": {
+      "p50": 926.9,
+      "p95": 1492.5,
+      "p99": 1756.7,
+      "max": 2100.9
     },
     "users": 64,
     "replicas": 4,
-    "postgres_cpu_percent": 90,
+    "postgres_cpu_percent": 94,
     "db_waits": {
-      "WAL flush (commit durability)": 165,
-      "waiting for the API (idle between statements)": 235,
-      "audit chain head row lock": 97
+      "audit chain head row lock": 3419,
+      "waiting for the API (idle between statements)": 271,
+      "WAL flush (commit durability)": 147,
+      "other row locks": 3,
+      "Timeout:VacuumDelay": 2,
+      "LWLock:LockManager": 3,
+      "Timeout:VacuumTruncate": 48,
+      "IO:DataFileExtend": 1,
+      "LWLock:ProcArray": 1
     },
-    "db_commits_per_incident": 36.9,
-    "db_inserts_per_incident": 99.3
+    "db_commits_per_incident": 25.0,
+    "db_inserts_per_incident": 27.9,
+    "durability": "exit"
   }
 ]

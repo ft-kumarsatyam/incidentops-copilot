@@ -110,9 +110,10 @@ def test_the_report_states_the_scaling_it_measured() -> None:
         docker_cpus=2,
     )
 
-    assert "50.0 to 75.0 incidents/s (×1.50)" in text
+    assert "50.0 → 75.0 incidents/s (×1.50)" in text
     assert "180% CPU" in text and "2 cores" in text
-    assert "| 4 | 16 | 75.0 |" in text
+    assert "one incident costs Postgres about 37" in text
+    assert "| async | 4 | 16 | 75.0 |" in text
 
 
 @pytest.mark.parametrize(

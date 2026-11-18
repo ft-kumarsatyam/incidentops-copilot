@@ -170,6 +170,11 @@ class Settings(BaseSettings):
     # queues and you run `incidentops worker` separately.
     execution_mode: Literal["sync", "async"] = "sync"
     worker_concurrency: int = 2
+    # When LangGraph writes checkpoints. "async" (default) saves after every step without waiting;
+    # "sync" waits for each save. "exit" saves only when a run finishes or pauses for approval:
+    # far fewer commits (the main database load per incident), but a worker that dies mid-run
+    # restarts that run from the beginning instead of the last step.
+    checkpoint_durability: Literal["sync", "async", "exit"] = "async"
     worker_poll_seconds: float = 1.0
     job_lease_seconds: float = 60.0
     job_max_attempts: int = 3

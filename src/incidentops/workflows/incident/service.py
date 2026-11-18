@@ -76,6 +76,12 @@ class IncidentService:
             settings, self._storage.checkpointer, provider or build_provider(settings)
         )
 
+    def _invoke(self, graph_input: Any, config: Any) -> Any:
+        """Run the graph, persisting checkpoints as ``CHECKPOINT_DURABILITY`` says."""
+        return self._graph.invoke(
+            graph_input, config=config, durability=self.settings.checkpoint_durability
+        )
+
     def close(self) -> None:
         self.events.close()
         self._storage.close()
@@ -165,7 +171,7 @@ class IncidentService:
         clean["max_retries"] = self.settings.max_research_attempts
         clean["confidence_threshold"] = self.settings.confidence_threshold
         with bound_context(run_id=run_id), span("incident.run", run_id=run_id):
-            self._graph.invoke(clean, config=self._config(run_id))
+            self._invoke(clean, self._config(run_id))
             state = self._sync(run_id, tenant)
             self.repo.add_audit(run_id, "created", actor, {"status": state["status"]})
             log.info("incident.created", status=state["status"], severity=state.get("severity"))
@@ -249,10 +255,10 @@ class IncidentService:
         ):
             snapshot = self._graph.get_state(config)
             if not snapshot.values:
-                self._graph.invoke(clean, config=config)
+                self._invoke(clean, config)
             elif snapshot.values.get("status") not in SETTLED:
                 # An earlier attempt died midway: continue from its last checkpoint.
-                self._graph.invoke(None, config=config)
+                self._invoke(None, config)
             state = self._sync(run_id)
             if state.get("status") not in SETTLED:
                 raise RuntimeError(f"analysis ended in unexpected status {state.get('status')!r}")
@@ -367,9 +373,9 @@ class IncidentService:
             )
         with bound_context(run_id=run_id):
             try:
-                self._graph.invoke(
+                self._invoke(
                     Command(resume={"decision": decision, "approved_actions": chosen}),
-                    config=self._config(run_id),
+                    self._config(run_id),
                 )
             except Exception:
                 self.repo.release(run_id, "awaiting_approval")

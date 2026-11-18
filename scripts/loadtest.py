@@ -325,7 +325,9 @@ def _docker_cpus() -> int:
     return int(probe.stdout.strip() or 0)
 
 
-def _start_replicas(count: int, python: str) -> list[subprocess.Popen[bytes]]:
+def _start_replicas(
+    count: int, python: str, durability: str = "async"
+) -> list[subprocess.Popen[bytes]]:
     env = {
         **os.environ,
         "INCIDENTOPS_ENV": "dev",
@@ -343,6 +345,7 @@ def _start_replicas(count: int, python: str) -> list[subprocess.Popen[bytes]]:
         "N8N_ACTION_WEBHOOK_URL": f"http://127.0.0.1:{ACTIONS_PORT}/webhook/incidentops/actions",
         "N8N_ACTION_TOKEN": "loadtest-action-token",
         "METRICS_ENABLED": "false",
+        "CHECKPOINT_DURABILITY": durability,
     }
     return [
         subprocess.Popen(
@@ -402,42 +405,54 @@ def _findings(results: list[dict[str, Any]], docker_cpus: int) -> list[str]:
     """What the table says, computed from it so the prose cannot drift from the numbers."""
     if not results:
         return []
-    least, most = min(r["replicas"] for r in results), max(r["replicas"] for r in results)
+    modes = sorted({r.get("durability", "async") for r in results}, key=_mode_order)
     lines = ["## What it shows", ""]
+    for mode in modes:
+        subset = [r for r in results if r.get("durability", "async") == mode]
+        label = f"`CHECKPOINT_DURABILITY={mode}`: " if len(modes) > 1 else ""
+        lines += _mode_findings(subset, label)
+    peak = max((r.get("postgres_cpu_percent", 0) for r in results), default=0)
+    if peak and docker_cpus:
+        lines.append(
+            f"- Postgres peaked at {peak}% CPU (100% is one core) in a Docker VM with "
+            f"{docker_cpus} cores."
+        )
+    return lines
+
+
+def _mode_order(mode: str) -> int:
+    return {"async": 0, "sync": 1, "exit": 2}.get(mode, 3)
+
+
+def _mode_findings(results: list[dict[str, Any]], label: str) -> list[str]:
+    lines: list[str] = []
+    least, most = min(r["replicas"] for r in results), max(r["replicas"] for r in results)
     for user_count in sorted({r["users"] for r in results}):
         rows = {r["replicas"]: r for r in results if r["users"] == user_count}
         if least in rows and most in rows and least != most:
             before, after = rows[least]["incidents_per_second"], rows[most]["incidents_per_second"]
             lines.append(
-                f"- {user_count} users: {least} → {most} replicas moves throughput from "
-                f"{before:.1f} to {after:.1f} incidents/s (×{after / before if before else 0:.2f}) "
-                f"and incident p95 from {rows[least]['incident']['p95']:.0f} to "
+                f"- {label}{user_count} users, {least} → {most} replicas: throughput "
+                f"{before:.1f} → {after:.1f} incidents/s (×{after / before if before else 0:.2f}), "
+                f"incident p95 {rows[least]['incident']['p95']:.0f} → "
                 f"{rows[most]['incident']['p95']:.0f} ms."
             )
     commits = [r["db_commits_per_incident"] for r in results if "db_commits_per_incident" in r]
     inserts = [r["db_inserts_per_incident"] for r in results if "db_inserts_per_incident" in r]
     if commits and inserts:
         lines.append(
-            f"- One incident costs Postgres about {sum(commits) / len(commits):.0f} committed "
-            f"transactions and {sum(inserts) / len(inserts):.0f} inserted rows, almost all of it "
-            "LangGraph checkpoint writes, so the database is the shared resource that every "
-            "replica queues on."
+            f"- {label}one incident costs Postgres about {sum(commits) / len(commits):.0f} "
+            f"committed transactions and {sum(inserts) / len(inserts):.0f} inserted rows."
         )
     busiest = results[-1] if "db_waits" in results[-1] else None
     waits = {k: v for k, v in (busiest or {}).get("db_waits", {}).items() if "API" not in k}
     total = sum(waits.values())
     if busiest and total:
         ranked = sorted(waits.items(), key=lambda item: item[1], reverse=True)[:3]
-        shares = ", ".join(f"{label} {count / total:.0%}" for label, count in ranked)
+        shares = ", ".join(f"{name} {count / total:.0%}" for name, count in ranked)
         lines.append(
-            f"- Where busy Postgres sessions waited ({busiest['replicas']} replicas, "
+            f"- {label}where busy Postgres sessions waited ({busiest['replicas']} replicas, "
             f"{busiest['users']} users, sampled mid-run): {shares}."
-        )
-    peak = max((r.get("postgres_cpu_percent", 0) for r in results), default=0)
-    if peak and docker_cpus:
-        lines.append(
-            f"- Postgres peaked at {peak}% CPU (100% is one core) in a Docker VM with "
-            f"{docker_cpus} cores."
         )
     return lines
 
@@ -460,16 +475,18 @@ def render(
         "every incident also crosses replicas through the shared Postgres. "
         f"{seconds:.0f} s measured per cell after a 5 s warmup.",
         "",
-        "| Replicas | Users | Incidents/s | Incident p50 | Incident p95 | Incident p99 "
-        "| Create p95 | Approve p95 | Postgres CPU | Errors |",
-        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Checkpoints | Replicas | Users | Incidents/s | Incident p50 | Incident p95 "
+        "| Incident p99 | Create p95 | Approve p95 | Postgres CPU | Errors |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for user_count in users:
         for r in sorted(
-            (x for x in results if x["users"] == user_count), key=lambda x: x["replicas"]
+            (x for x in results if x["users"] == user_count),
+            key=lambda x: (_mode_order(x.get("durability", "async")), x["replicas"]),
         ):
             lines.append(
-                f"| {r['replicas']} | {r['users']} | {r['incidents_per_second']:.1f} "
+                f"| {r.get('durability', 'async')} | {r['replicas']} | {r['users']} "
+                f"| {r['incidents_per_second']:.1f} "
                 f"| {r['incident']['p50']:.0f} ms | {r['incident']['p95']:.0f} ms "
                 f"| {r['incident']['p99']:.0f} ms | {r['create']['p95']:.0f} ms "
                 f"| {r['decide']['p95']:.0f} ms | {r.get('postgres_cpu_percent', 0)}% "
@@ -480,15 +497,17 @@ def render(
         "",
         "An *incident* is one create plus one approval, timed together. Closed-loop users: with "
         "more users than the stack can serve, latency is mostly queueing, so compare rows with the "
-        "same number of users. Repeated runs on one machine varied by roughly 10%, so differences "
-        "smaller than that, such as ×1.19 against ×1.29, are noise.",
+        "same number of users. The same cell varied by up to about 30% between runs hours apart on "
+        "this machine, so compare rows from one run only and treat small gaps as noise.",
         "",
         "## How this was run",
         "",
         f"- Machine: {hardware}. {versions}.",
         "- Replicas are `uvicorn` processes on that machine, one worker each, "
         "`EXECUTION_MODE=sync`, "
-        "the offline rules provider (no model call), `RUNBOOK_STORE=postgres`.",
+        "the offline rules provider (no model call), `RUNBOOK_STORE=postgres`. *Checkpoints* is "
+        "`CHECKPOINT_DURABILITY`: `async` saves after every step (the default), `exit` only when "
+        "a run finishes or pauses for approval.",
         "- Postgres 17 (pgvector image, default durability settings) and Redis run in Docker "
         f"(`compose.loadtest.yaml`, VM with {docker_cpus} CPUs); the n8n webhook is a local stub "
         "that answers instantly.",
@@ -502,48 +521,64 @@ def render(
     return "\n".join(lines)
 
 
-def run_matrix(replicas: list[int], users: list[int], seconds: float, out: Path) -> int:
+def _measure(urls: list[str], user_count: int, seconds: float) -> dict[str, Any]:
+    """One cell: warm up, then measure latency, database commits and what the database waited on."""
+    asyncio.run(run_load(urls, users=user_count, seconds=0.0, warmup=5.0))
+    commits, inserts = _db_counters()
+    sampled: dict[str, Any] = {}
+    sampler = threading.Thread(target=_sample_db, args=(sampled, seconds))
+    sampler.start()
+    result = asyncio.run(run_load(urls, users=user_count, seconds=seconds, warmup=0.0))
+    sampler.join()
+    after_commits, after_inserts = _db_counters()
+    done = max(1, result["incidents"])
+    result["postgres_cpu_percent"] = round(sampled.get("cpu", 0.0))
+    result["db_waits"] = sampled.get("waits", {})
+    result["db_commits_per_incident"] = round((after_commits - commits) / done, 1)
+    result["db_inserts_per_incident"] = round((after_inserts - inserts) / done, 1)
+    return result
+
+
+def run_matrix(
+    replicas: list[int],
+    users: list[int],
+    seconds: float,
+    out: Path,
+    durabilities: list[str] | None = None,
+) -> int:
     python = shutil.which("python") or sys.executable
     actions = ThreadingHTTPServer(("127.0.0.1", ACTIONS_PORT), _ActionsHandler)
     threading.Thread(target=actions.serve_forever, daemon=True).start()
     _services("up")
     results: list[dict[str, Any]] = []
     failed = False
+    modes = durabilities or ["async"]
     try:
-        for count in replicas:
-            _reset_database()
-            processes = _start_replicas(count, python)
-            urls = [f"http://127.0.0.1:{BASE_PORT + index}" for index in range(count)]
-            try:
-                _wait_ready(urls)
-                for user_count in users:
-                    print(f"{count} replica(s), {user_count} users ...", flush=True)
-                    asyncio.run(run_load(urls, users=user_count, seconds=0.0, warmup=5.0))
-                    commits, inserts = _db_counters()
-                    sampled: dict[str, Any] = {}
-                    sampler = threading.Thread(target=_sample_db, args=(sampled, seconds))
-                    sampler.start()
-                    result = asyncio.run(
-                        run_load(urls, users=user_count, seconds=seconds, warmup=0.0)
-                    )
-                    sampler.join()
-                    after_commits, after_inserts = _db_counters()
-                    result["postgres_cpu_percent"] = round(sampled.get("cpu", 0.0))
-                    result["db_waits"] = sampled.get("waits", {})
-                    done = max(1, result["incidents"])
-                    result["db_commits_per_incident"] = round((after_commits - commits) / done, 1)
-                    result["db_inserts_per_incident"] = round((after_inserts - inserts) / done, 1)
-                    print(
-                        f"  {result['incidents_per_second']} incidents/s, "
-                        f"p95 {result['incident']['p95']} ms, errors {result['errors']}",
-                        flush=True,
-                    )
-                    if result["errors"]:
-                        print(f"  first error: {result['first_error']}", flush=True)
-                        failed = True
-                    results.append(result)
-            finally:
-                _stop(processes)
+        for mode in modes:
+            for count in replicas:
+                _reset_database()
+                processes = _start_replicas(count, python, mode)
+                urls = [f"http://127.0.0.1:{BASE_PORT + index}" for index in range(count)]
+                try:
+                    _wait_ready(urls)
+                    for user_count in users:
+                        print(
+                            f"{mode} checkpoints, {count} replica(s), {user_count} users ...",
+                            flush=True,
+                        )
+                        result = _measure(urls, user_count, seconds)
+                        result["durability"] = mode
+                        print(
+                            f"  {result['incidents_per_second']} incidents/s, "
+                            f"p95 {result['incident']['p95']} ms, errors {result['errors']}",
+                            flush=True,
+                        )
+                        if result["errors"]:
+                            print(f"  first error: {result['first_error']}", flush=True)
+                            failed = True
+                        results.append(result)
+                finally:
+                    _stop(processes)
     finally:
         actions.shutdown()
         _services("down")
@@ -576,6 +611,11 @@ def main() -> int:
     matrix = sub.add_parser("matrix", help="start N replicas locally and measure each")
     matrix.add_argument("--replicas", default="1,2,4")
     matrix.add_argument("--users", default="16,64")
+    matrix.add_argument(
+        "--durability",
+        default="async,exit",
+        help="comma-separated CHECKPOINT_DURABILITY modes to compare (async, sync, exit)",
+    )
     matrix.add_argument("--seconds", type=float, default=30)
     matrix.add_argument("--out", type=Path, default=REPORT)
     args = parser.parse_args()
@@ -597,6 +637,7 @@ def main() -> int:
         [int(x) for x in args.users.split(",")],
         args.seconds,
         args.out,
+        [m.strip() for m in args.durability.split(",") if m.strip()],
     )
 
 

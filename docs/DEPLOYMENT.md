@@ -276,21 +276,29 @@ To run several API instances:
 ### What scaling out buys you (measured)
 
 [evals/loadtest_report.md](../evals/loadtest_report.md) (`make loadtest`) drives incident creation
-and approval through 1, 2 and 4 replicas on one Postgres. On the machine in that report, going from
-1 to 4 replicas raised throughput by about 20 to 30% and left p95 latency roughly flat. Replicas are
-not the limit; the shared database is:
+and approval through 1, 2 and 4 replicas on one Postgres, with the default checkpoint mode and with
+`CHECKPOINT_DURABILITY=exit`. On the machine in that report:
 
-- One incident is about 37 committed transactions, mostly LangGraph checkpoint writes. Commit
-  flushes (WAL) are the largest wait, so Postgres on fast local storage with a real core budget
-  raises the ceiling far more than another API replica.
-- Audit entries are chained per tenant, so writers of one tenant queue on a row lock held until
-  commit. Load spread over several tenants does not queue on each other. A single busy tenant is
-  capped by one commit at a time.
+- **Replicas added little.** Going from 1 to 4 replicas moved throughput by 0 to 30% and left p95
+  roughly flat. The shared database is the limit, not the API tier.
+- **`CHECKPOINT_DURABILITY=exit` helped most.** One incident costs about 37 committed transactions
+  by default, mostly LangGraph saving a checkpoint after every step. `exit` saves only when a run
+  finishes or pauses for approval (about 25 transactions) and ran roughly 1.5× faster at the same
+  replica count. The cost: a worker that dies mid-run restarts that run from the beginning instead
+  of the last step. That is cheap with the offline rules provider and costs repeated model calls
+  with Claude, so choose it with that in mind. The approval pause is still saved, so waiting for a
+  human is not affected.
+- **Then the audit chain.** Audit entries are chained per tenant, so writers of one tenant queue on
+  a row lock held until commit. With `exit`, that lock was most of what busy Postgres sessions
+  waited on at 4 replicas. Load spread over several tenants does not queue on each other. Sharing
+  commits between writers inside one process and trimming the lock's statements were both tried
+  and measured no gain, because the queue is between replicas.
 - Replicas still earn their place for availability, rolling restarts and for absorbing slow model
   calls (`EXECUTION_MODE=async` with separate workers), which this offline-rules test does not
   include.
 
-Treat the absolute numbers as specific to that machine and re-run `make loadtest` on yours.
+The absolute numbers are specific to that machine and drift by up to about 30% between runs, so
+re-run `make loadtest` on yours and compare rows within one run.
 
 ## Observability
 

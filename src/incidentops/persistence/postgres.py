@@ -210,19 +210,20 @@ class PostgresIncidentRepo(AuditQueries, ApprovalQueries, KeyQueries):
                 "ON CONFLICT (tenant_id) DO NOTHING",
                 (tenant,),
             )
-            # The row lock serialises writers of this tenant's chain across every replica. It is
-            # held until commit, so take it with the last reads and finish in one more statement.
+            # The row lock serialises writers of this tenant's chain across every replica.
             head = connection.execute(
-                "UPDATE audit_heads SET seq = seq + 1 WHERE tenant_id = %s RETURNING seq, hash",
-                (tenant,),
+                "SELECT seq, hash FROM audit_heads WHERE tenant_id = %s FOR UPDATE", (tenant,)
             ).fetchone()
-            seq, prev, at = int(head["seq"]), head["hash"], _now()
+            seq, prev, at = int(head["seq"]) + 1, head["hash"], _now()
             digest = entry_hash(prev, canonical(tenant, seq, run_id, event, actor, detail_json, at))
             connection.execute(
-                "WITH entry AS (INSERT INTO audit_log (run_id, event, actor, detail_json, at, "
-                "tenant_id, seq, prev_hash, hash) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)) "
-                "UPDATE audit_heads SET hash = %s WHERE tenant_id = %s",
-                (run_id, event, actor, detail_json, at, tenant, seq, prev, digest, digest, tenant),
+                "INSERT INTO audit_log (run_id, event, actor, detail_json, at, tenant_id, seq, "
+                "prev_hash, hash) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (run_id, event, actor, detail_json, at, tenant, seq, prev, digest),
+            )
+            connection.execute(
+                "UPDATE audit_heads SET seq = %s, hash = %s WHERE tenant_id = %s",
+                (seq, digest, tenant),
             )
 
     def audit_for(self, run_id: str, *, tenant: str | None = None) -> list[dict[str, Any]]:

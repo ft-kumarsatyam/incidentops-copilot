@@ -5,6 +5,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- `CHECKPOINT_DURABILITY` (`async` default, `sync`, `exit`): when LangGraph saves workflow
+  checkpoints. `exit` saves only when a run finishes or pauses for approval, which cuts the
+  database commits per incident (measured in the load test) at the cost of restarting a run from
+  the beginning if its worker dies mid-run. About 1.5× throughput in the load test.
 - Load test (`make loadtest`, `scripts/loadtest.py`, `compose.loadtest.yaml`): creates and approves
   incidents through 1, 2 and 4 replicas on a shared Postgres and Redis, and writes p50/p95/p99,
   throughput, errors, Postgres CPU and database wait events to `evals/loadtest_report.md`.

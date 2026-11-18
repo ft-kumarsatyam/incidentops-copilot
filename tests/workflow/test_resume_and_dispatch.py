@@ -193,3 +193,46 @@ def test_decision_that_fails_validation_publishes_nothing(service: IncidentServi
         service.decide(payload["run_id"], payload["run_id"], "approved", approved_actions=["nope"])
 
     assert seen == []
+
+
+def test_dispatch_to_a_host_outside_the_allowlist_fails_without_calling_out(
+    settings: Settings,
+) -> None:
+    calls: list[str] = []
+    configured = settings.model_copy(
+        update={
+            "n8n_action_webhook_url": "https://evil.example/webhook",
+            "outbound_allowed_hosts": ["n8n.internal"],
+        }
+    )
+    service = IncidentService(configured, dispatcher=lambda *a, **k: calls.append("x") or {})
+    try:
+        payload = load_fixture("incident_complete.json")
+        service.start(payload)
+        result = service.decide(payload["run_id"], payload["run_id"], "approved")
+    finally:
+        service.close()
+
+    assert result["status"] == "failed"
+    assert calls == []
+
+
+def test_signing_secret_is_passed_to_the_dispatcher_only_when_configured(
+    settings: Settings,
+) -> None:
+    seen: list[dict[str, Any]] = []
+    configured = settings.model_copy(
+        update={
+            "n8n_action_webhook_url": "https://n8n.internal/webhook",
+            "webhook_signing_secret": "sign-me",
+        }
+    )
+    service = IncidentService(configured, dispatcher=lambda url, p, **kw: seen.append(kw) or {})
+    try:
+        payload = load_fixture("incident_complete.json")
+        service.start(payload)
+        service.decide(payload["run_id"], payload["run_id"], "approved")
+    finally:
+        service.close()
+
+    assert seen[0]["signing_secret"] == "sign-me"

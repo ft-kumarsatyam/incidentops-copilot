@@ -6,6 +6,8 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, Request
 
 from incidentops.core.config import Settings
+from incidentops.core.signing import SignatureError
+from incidentops.core.signing import verify as verify_signature
 from incidentops.workflows.incident.service import IncidentService
 
 
@@ -29,6 +31,28 @@ def authenticate(
         return
     if not x_api_key or not hmac.compare_digest(x_api_key, expected):
         raise HTTPException(status_code=401, detail="invalid API key")
+
+
+async def verify_inbound_signature(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+    x_incidentops_timestamp: Annotated[str | None, Header()] = None,
+    x_incidentops_signature: Annotated[str | None, Header()] = None,
+) -> None:
+    """When INBOUND_SIGNING_SECRET is set, require a fresh HMAC signature over the raw body."""
+    secret = settings.inbound_signing_secret
+    if not secret:
+        return
+    try:
+        verify_signature(
+            await request.body(),
+            secret,
+            timestamp=x_incidentops_timestamp,
+            signature=x_incidentops_signature,
+            tolerance=settings.signature_tolerance_seconds,
+        )
+    except SignatureError as error:
+        raise HTTPException(status_code=401, detail=f"invalid signature: {error}") from error
 
 
 def get_actor(x_actor: Annotated[str | None, Header()] = None) -> str:

@@ -30,6 +30,9 @@ def ready(
         checks["database"] = "ok"
     except Exception:
         checks["database"] = "unavailable"
+    if settings.redis_url:
+        # Informational: with Redis down the API still serves (stream and limiter fall back local).
+        checks["redis"] = "ok" if service.events.ping() else "unavailable"
     checks["runbook_index"] = "ok" if settings.runbook_db.is_file() else "missing"
     checks["n8n_actions"] = "configured" if settings.n8n_action_webhook_url else "not_configured"
     action_url = (

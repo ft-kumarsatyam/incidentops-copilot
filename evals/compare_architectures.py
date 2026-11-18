@@ -15,6 +15,7 @@ from incidentops.agents.resilient import TriageProvider
 from incidentops.agents.rules import RulesProvider
 from incidentops.agents.specialists import SpecialistProvider
 from incidentops.core.config import Settings
+from incidentops.core.logging import configure_logging
 from incidentops.rag import index_runbooks
 from incidentops.workflows.incident import IncidentService
 
@@ -126,6 +127,7 @@ def render(baseline: ArchitectureResult, specialists: ArchitectureResult) -> str
 
 
 def main() -> None:
+    configure_logging("ERROR", json_output=False)
     import os
 
     cases = load_cases()

@@ -16,7 +16,7 @@ COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 COPY --from=web /app/src/incidentops/static ./src/incidentops/static
 COPY runbooks ./runbooks
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[postgres,redis]"
 
 RUN useradd --create-home appuser && mkdir -p /app/.data && chown -R appuser:appuser /app
 USER appuser

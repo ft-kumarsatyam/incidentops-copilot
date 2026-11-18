@@ -1,11 +1,18 @@
 .DEFAULT_GOAL := help
 PY ?= .venv/bin/python
 BIN := .venv/bin
+# Docker Compose v2 plugin if present, else the standalone binary.
+COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)
+# Postgres and Redis for the tests (see compose.test.yaml). TESTS_STRICT makes a missing service or
+# optional extra fail the run instead of skipping, so "all passed" really means everything ran.
+TEST_ENV := TESTS_STRICT=1 \
+	TEST_DATABASE_URL=postgresql://postgres:test@localhost:55432/postgres \
+	TEST_REDIS_URL=redis://localhost:56379/0
 
-.PHONY: help setup index dev serve demo test cov eval eval-guardrails eval-claude eval-architecture eval-retrieval e2e-smoke lint format typecheck check web-install web-dev web-build web-test up down clean
+.PHONY: help setup index dev serve demo test test-fast test-services test-services-down cov eval eval-guardrails eval-claude eval-architecture eval-retrieval e2e-smoke lint format typecheck check web-install web-dev web-build web-test up down clean
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-11s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-19s\033[0m %s\n", $$1, $$2}'
 
 setup: ## Create the virtualenv and install everything (uses uv if available)
 	@command -v uv >/dev/null && uv venv --quiet .venv && uv pip install --quiet --python $(PY) -e ".[dev]" \
@@ -39,11 +46,20 @@ serve: ## Run API + built UI (production settings; requires INCIDENTOPS_API_KEY)
 demo: index ## Run a sample incident end to end in the terminal
 	INCIDENTOPS_ENV=dev LOG_LEVEL=ERROR $(BIN)/incidentops incident --fixture tests/fixtures/incident_complete.json --approval approved
 
-test: ## Run the test suite
+test-services: ## Start throwaway Postgres + Redis for the tests (needs Docker)
+	@$(COMPOSE) -f compose.test.yaml up -d --wait
+
+test-services-down: ## Stop and wipe the test Postgres + Redis
+	@$(COMPOSE) -f compose.test.yaml down -v
+
+test: test-services ## Run the whole test suite, Postgres and Redis included (needs Docker)
+	$(TEST_ENV) $(BIN)/pytest -q
+
+test-fast: ## Run the suite without Docker; the Postgres and Redis tests are skipped
 	$(BIN)/pytest -q
 
-cov: ## Run tests with coverage (fails under 85%)
-	$(BIN)/pytest -q --cov
+cov: test-services ## Run all tests with coverage (fails under 85%)
+	$(TEST_ENV) $(BIN)/pytest -q --cov
 
 eval: ## Score core + adversarial/edge-case incidents with the offline rules provider (free)
 	$(PY) -m evals.run_evals --provider rules

@@ -44,6 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         get_logger(__name__).info("app.start", env=settings.incidentops_env)
         yield
+        await app.state.limiter.aclose()
         service.close()
 
     app = FastAPI(title="IncidentOps Copilot", version=__version__, lifespan=lifespan)

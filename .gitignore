@@ -78,3 +78,6 @@ CLAUDE.local.md
 .aider*
 .codex/
 .gemini/
+
+# fastembed model cache used by CI
+.fastembed-cache/

@@ -22,6 +22,19 @@ make web-test     # just the UI typecheck and tests
 
 Individual targets: `make lint`, `make format`, `make typecheck`, `make test`,
 `make cov` (fails under 85%), `make eval`, `make eval-retrieval`. Run `make help` for the full list.
+
+### Tests: everything runs, nothing skips, no warnings
+
+`make test`, `make cov` and `make check` start a throwaway Postgres and Redis
+(`compose.test.yaml`, needs Docker) and run with `TESTS_STRICT=1`. In strict mode a missing
+service or optional extra *fails* the run instead of skipping it, so "all passed" means every
+test ran. CI does the same. `make test-services-down` stops the services.
+
+No Docker? `make test-fast` runs the suite without them and skips the Postgres and Redis tests.
+
+Any Python warning fails the suite (`filterwarnings = ["error", ...]` in `pyproject.toml`). The
+one exemption is a third-party deprecation in `langsmith` on Python 3.14 that has no fix
+upstream yet. If a new warning appears, fix its cause rather than adding a filter.
 CI runs the same gates on Python 3.11 and 3.13, builds the UI, and builds the
 Docker image.
 

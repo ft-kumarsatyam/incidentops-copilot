@@ -7,10 +7,22 @@ services:
       N8N_ACTION_TOKEN: ${N8N_ACTION_TOKEN:-local-action-token}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DATABASE_PATH: /app/.data/incidentops.db
+      # Set to a postgresql:// URL (and run with --profile postgres) to use Postgres instead of SQLite.
+      DATABASE_URL: ${DATABASE_URL:-}
+      # Set to redis://redis:6379/0 (and run with --profile redis) to share the live event stream
+      # and rate limits across several api replicas.
+      REDIS_URL: ${REDIS_URL:-}
       RUNBOOK_DIR: /app/runbooks
       RUNBOOK_DB: /app/.data/runbooks.db
       AUTO_INDEX_RUNBOOKS: "true"
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false  # only when the postgres profile is active
+      redis:
+        condition: service_healthy
+        required: false  # only when the redis profile is active
     ports:
       - "8000:8000"
     volumes:
@@ -21,6 +33,32 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    restart: unless-stopped
+
+  db:
+    profiles: ["postgres"]
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: incidentops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-db-password}
+      POSTGRES_DB: incidentops
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U incidentops"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    profiles: ["redis"]
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   n8n:
@@ -50,4 +88,5 @@ services:
 
 volumes:
   incidentops-data:
+  pg-data:
   n8n-data:

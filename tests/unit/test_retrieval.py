@@ -1,9 +1,8 @@
 from pathlib import Path
 
-import pytest
-
 from incidentops.core.config import Settings
 from incidentops.rag import FtsRetriever, build_runbook_retriever, index_runbooks_for_settings
+from tests.conftest import require_module
 
 
 def test_build_runbook_retriever_defaults_to_fts(tmp_path: Path) -> None:
@@ -34,7 +33,7 @@ def test_index_runbooks_for_settings_fts(tmp_path: Path) -> None:
 
 
 def test_hybrid_index_and_search(tmp_path: Path) -> None:
-    pytest.importorskip("fastembed")
+    require_module("fastembed")
     runbooks = tmp_path / "runbooks"
     runbooks.mkdir()
     (runbooks / "checkout-api.md").write_text(

@@ -16,6 +16,7 @@ from typing import Any
 
 from evals.scorers import CHECKS, case_passed, score
 from incidentops.core.config import Settings
+from incidentops.core.logging import configure_logging
 from incidentops.rag import index_runbooks
 from incidentops.workflows.incident import IncidentService
 
@@ -128,6 +129,7 @@ def render(reports: list[ProviderReport]) -> str:
 
 
 def main() -> int:
+    configure_logging("ERROR", json_output=False)  # the evals feed hostile input on purpose
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )

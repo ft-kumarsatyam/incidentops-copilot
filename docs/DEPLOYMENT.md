@@ -111,18 +111,53 @@ shared index:
 
 See [ADR 007](adr/007-hybrid-runbook-retrieval.md).
 
+## Postgres
+
+SQLite is the default and fine for one instance. For several instances or managed backups,
+set `DATABASE_URL=postgresql://user:pass@host:5432/dbname` and install the extra
+(`pip install 'incidentops[postgres]'`; the Docker image already includes it).
+
+- The service fails fast at startup if the database is unreachable or a migration fails.
+- `claim` (the approve/reject lock) is one atomic `UPDATE`, so two replicas cannot both decide.
+- `DATABASE_POOL_SIZE` caps connections per instance (default 10).
+- Existing SQLite data is not copied over. Start Postgres deployments fresh, or export the
+  incidents you need to keep.
+- `docker compose --profile postgres up` runs a bundled Postgres for local use.
+
+## Redis
+
+Set `REDIS_URL=redis://host:6379/0` and install the extra (`pip install 'incidentops[redis]'`;
+the Docker image includes it). `REDIS_PREFIX` namespaces the keys, so several deployments can
+share one Redis.
+
+- **Event stream.** Events go through a Redis channel, and each replica relays them to its own
+  connected clients. Delivery is a live hint: the database is the source of truth, and a
+  replica that loses its Redis connection resubscribes with backoff. Events published during
+  that gap are not replayed, so the UI's normal refresh covers them.
+- **Rate limiting.** One sliding window per client, counted atomically in Redis (a Lua script
+  using Redis' clock), so the limit holds across replicas.
+- **Redis down.** The API keeps serving. Publishing delivers locally and the limiter counts per
+  replica until Redis returns. `/ready` reports `redis: unavailable` but stays ready.
+- `docker compose --profile redis up` runs a bundled Redis for local use. Combine it with
+  `--profile postgres` for a two-replica setup.
+
 ## Scaling out
 
 To run several API instances:
 
-1. Switch the checkpointer to `PostgresSaver` and port `IncidentRepo` (two tables).
-2. Replace `EventBus` with Redis pub/sub or Postgres `LISTEN/NOTIFY`. The rest of
-   the code only calls `publish` and `subscribe`.
-3. Move rate limiting to the proxy or Redis.
+1. Set `DATABASE_URL` to a Postgres database. The read-model, audit log and LangGraph
+   checkpoints (`PostgresSaver`) all move there. See [Postgres](#postgres).
+2. Set `REDIS_URL`. The live event stream (SSE) and the rate limiter then use Redis, so a
+   client connected to one replica sees changes made on another and limits are global. See
+   [Redis](#redis).
+3. Put a proxy or load balancer in front. Streams are long-lived, so allow idle timeouts above
+   the 15 second keep-alive, and disable response buffering (the API already sends
+   `X-Accel-Buffering: no`).
 4. Replace n8n's static-data idempotency gate with Redis `SET NX` or a unique constraint.
 
 ## Upgrades
 
-The schema is created on startup with `CREATE TABLE IF NOT EXISTS`. There are no
-migrations yet. Before an upgrade, take a backup. When a release changes the schema,
-the changelog will say so.
+Schema changes are versioned migrations (`src/incidentops/persistence/migrations.py`),
+applied on startup and recorded in `schema_migrations`. On Postgres a session advisory lock
+makes replicas that start together apply each migration once. Databases created before
+migrations existed are adopted in place. Before an upgrade, take a backup.

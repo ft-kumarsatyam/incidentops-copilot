@@ -13,28 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS incidents (
-    run_id TEXT PRIMARY KEY,
-    status TEXT NOT NULL,
-    severity TEXT,
-    service TEXT,
-    summary TEXT,
-    state_json TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status, updated_at DESC);
-CREATE TABLE IF NOT EXISTS audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id TEXT NOT NULL,
-    event TEXT NOT NULL,
-    actor TEXT NOT NULL,
-    detail_json TEXT NOT NULL,
-    at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_audit_run ON audit_log(run_id, id);
-"""
+from incidentops.persistence.migrations import migrate_sqlite
 
 
 def _now() -> str:
@@ -47,7 +26,7 @@ class IncidentRepo:
         database.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
-            connection.executescript(SCHEMA)
+            migrate_sqlite(connection)
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -55,6 +34,9 @@ class IncidentRepo:
             connection.row_factory = sqlite3.Row
             with connection:
                 yield connection
+
+    def close(self) -> None:
+        """Connections are per-operation, so there is nothing to release."""
 
     def ping(self) -> bool:
         with self._connect() as connection:

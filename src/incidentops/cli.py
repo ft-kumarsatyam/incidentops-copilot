@@ -8,7 +8,7 @@ from typing import Any
 
 from incidentops.core.config import Settings
 from incidentops.core.logging import configure_logging
-from incidentops.persistence.repo import IncidentRepo
+from incidentops.persistence.factory import open_repo
 from incidentops.rag import build_runbook_retriever, index_runbooks_for_settings
 from incidentops.workflows.incident import IncidentService
 
@@ -30,7 +30,7 @@ def check(settings: Settings) -> dict[str, Any]:
         "zapier_actions": (
             "configured" if settings.zapier_action_webhook_url else "not configured"
         ),
-        "database": str(settings.database_path),
+        "database": "postgres" if settings.database_url else str(settings.database_path),
         "runbook_index": "present" if settings.runbook_db.is_file() else "missing",
     }
 
@@ -58,8 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run_digest(settings: Settings, hours: int) -> dict[str, Any]:
     since = datetime.now(UTC) - timedelta(hours=hours)
-    repo = IncidentRepo(settings.database_path)
-    rows, _ = repo.search(limit=200)
+    repo = open_repo(settings)
+    try:
+        rows, _ = repo.search(limit=200)
+    finally:
+        repo.close()
     selected = [
         {
             "run_id": row["run_id"],

@@ -1,9 +1,12 @@
 """Shared reliable JSON webhook transport."""
 
+import json
 from typing import Any
 
 import httpx
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
+
+from incidentops.core.signing import signature_headers
 
 
 def _is_transient(error: BaseException) -> bool:
@@ -20,9 +23,26 @@ def post_json(
     timeout: float,
     attempts: int,
     backoff: float,
+    signing_secret: str | None = None,
 ) -> dict[str, Any]:
+    # Signing needs the exact bytes on the wire, so a signed request sends pre-encoded content.
+    body = json.dumps(payload, separators=(",", ":"), default=str).encode()
+
     def post() -> httpx.Response:
-        response = httpx.post(webhook_url, json=payload, headers=headers, timeout=timeout)
+        if signing_secret:
+            # Re-signed on every attempt so a retry after backoff still has a fresh timestamp.
+            response = httpx.post(
+                webhook_url,
+                content=body,
+                headers={
+                    "Content-Type": "application/json",
+                    **headers,
+                    **signature_headers(body, signing_secret),
+                },
+                timeout=timeout,
+            )
+        else:
+            response = httpx.post(webhook_url, json=payload, headers=headers, timeout=timeout)
         response.raise_for_status()
         return response
 

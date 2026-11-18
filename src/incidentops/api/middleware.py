@@ -3,37 +3,17 @@
 import hashlib
 import time
 import uuid
-from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
+from incidentops.api.ratelimit import build_rate_limiter
 from incidentops.core.config import Settings
 from incidentops.core.logging import bound_context, get_logger
 
 log = get_logger(__name__)
 _EXEMPT_PREFIXES = ("/health", "/ready", "/assets")
-
-
-class RateLimiter:
-    """In-process sliding window. Use a shared store (Redis) if you run multiple replicas."""
-
-    def __init__(self, limit_per_minute: int) -> None:
-        self.limit = limit_per_minute
-        self._hits: dict[str, deque[float]] = defaultdict(deque)
-
-    def allow(self, key: str, now: float | None = None) -> bool:
-        if self.limit <= 0:
-            return True
-        now = time.monotonic() if now is None else now
-        window = self._hits[key]
-        while window and now - window[0] > 60:
-            window.popleft()
-        if len(window) >= self.limit:
-            return False
-        window.append(now)
-        return True
 
 
 def _client_key(request: Request) -> str:
@@ -43,7 +23,8 @@ def _client_key(request: Request) -> str:
 
 
 def install_middleware(app: FastAPI, settings: Settings) -> None:
-    limiter = RateLimiter(settings.rate_limit_per_minute)
+    limiter = build_rate_limiter(settings)
+    app.state.limiter = limiter
 
     @app.middleware("http")
     async def guard(
@@ -56,7 +37,7 @@ def install_middleware(app: FastAPI, settings: Settings) -> None:
             declared = request.headers.get("content-length", "0")
             if declared.isdigit() and int(declared) > settings.max_body_bytes:
                 response = JSONResponse({"error": "payload_too_large"}, status_code=413)
-            elif not request.url.path.startswith(_EXEMPT_PREFIXES) and not limiter.allow(
+            elif not request.url.path.startswith(_EXEMPT_PREFIXES) and not await limiter.hit(
                 _client_key(request)
             ):
                 response = JSONResponse(

@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     max_body_bytes: int = 256_000
     static_dir: Path | None = None  # built web UI; defaults to the packaged ./static
     rate_limit_per_minute: int = 120
+    # When set, the event stream and rate limiter are shared across replicas through Redis.
+    redis_url: str | None = None
+    redis_prefix: str = "incidentops"
 
     # Auth and integrations
     incidentops_api_key: str | None = None
@@ -25,6 +28,13 @@ class Settings(BaseSettings):
     action_provider: Literal["n8n", "zapier"] = "n8n"
     n8n_action_webhook_url: str | None = None
     n8n_action_token: str | None = None  # shared secret n8n checks on the actions webhook
+    # HMAC signing (replay-protected). Outbound signs dispatches to n8n/Zapier; inbound, when
+    # set, requires POST /incidents to carry a valid signature in addition to the API key.
+    webhook_signing_secret: str | None = None
+    inbound_signing_secret: str | None = None
+    signature_tolerance_seconds: int = 300
+    # Hosts the action dispatcher may call. Empty means any host.
+    outbound_allowed_hosts: list[str] = Field(default_factory=list)
     n8n_dispatch_attempts: int = 3
     n8n_dispatch_backoff: float = 0.5
     zapier_action_webhook_url: str | None = None
@@ -34,6 +44,9 @@ class Settings(BaseSettings):
 
     # Storage
     database_path: Path = Path(".data/incidentops.db")
+    # When set, Postgres replaces SQLite for the read-model, audit log and LangGraph checkpoints.
+    database_url: str | None = None
+    database_pool_size: int = 10
     runbook_dir: Path = Path("runbooks")
     runbook_db: Path = Path(".data/runbooks.db")
     runbook_retrieval: Literal["fts", "hybrid"] = "fts"

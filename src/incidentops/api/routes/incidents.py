@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from incidentops.api.deps import authenticate, get_actor, get_service
+from incidentops.api.deps import authenticate, get_actor, get_service, verify_inbound_signature
 from incidentops.api.events import event_stream
 from incidentops.workflows.incident.service import IncidentService
 
@@ -101,7 +101,7 @@ def list_incidents(
     return items
 
 
-@router.post("", response_model=IncidentOut)
+@router.post("", response_model=IncidentOut, dependencies=[Depends(verify_inbound_signature)])
 def create_incident(request: IncidentRequest, service: Service, actor: Actor) -> dict[str, Any]:
     return service.start(request.model_dump(exclude_none=True), actor=actor)
 

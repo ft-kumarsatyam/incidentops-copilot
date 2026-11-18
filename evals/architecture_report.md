@@ -4,8 +4,8 @@ Same labeled incidents, runbooks, safety checks, and deterministic logic; only t
 
 | Architecture | Roles | Cases passed | Safety | Grounded | Median ms | p95 ms |
 |---|---:|---:|---:|---:|---:|---:|
-| Current graph | 2 | 100% | 100% | 100% | 3.87 | 8.93 |
-| Parallel specialists (RoleGraph rules) | 5 | 100% | 100% | 100% | 6.09 | 10.15 |
+| Current graph | 2 | 100% | 100% | 100% | 4.87 | 6.43 |
+| Parallel specialists (RoleGraph rules) | 5 | 100% | 100% | 100% | 7.33 | 11.56 |
 
 ## Decision
 

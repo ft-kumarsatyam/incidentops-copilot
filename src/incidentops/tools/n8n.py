@@ -13,6 +13,7 @@ def request_actions(
     attempts: int = 3,
     backoff: float = 0.5,
     token: str | None = None,
+    signing_secret: str | None = None,
 ) -> dict[str, Any]:
     """POST the approved incident to n8n, retrying transient failures with backoff."""
     if payload.get("approval") != "approved":
@@ -29,4 +30,5 @@ def request_actions(
         timeout=timeout,
         attempts=attempts,
         backoff=backoff,
+        signing_secret=signing_secret,
     )

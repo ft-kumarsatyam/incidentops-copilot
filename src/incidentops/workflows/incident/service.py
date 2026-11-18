@@ -5,23 +5,23 @@ only place that talks to the graph, keeps the queryable read-model in sync, writ
 log, and dispatches approved actions to n8n.
 """
 
-import sqlite3
 from collections.abc import Callable
 from typing import Any
 
 import httpx
-from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
 from incidentops.agents.factory import build_provider
 from incidentops.agents.resilient import TriageProvider
-from incidentops.api.events import EventBus
+from incidentops.api.events import build_event_bus
 from incidentops.core.config import Settings
 from incidentops.core.errors import IncidentConflictError, IncidentNotFoundError
 from incidentops.core.logging import bound_context, get_logger
 from incidentops.core.redact import redact
+from incidentops.core.signing import host_allowed
 from incidentops.core.telemetry import span
-from incidentops.persistence.repo import IncidentRepo
+from incidentops.persistence.base import Repo
+from incidentops.persistence.factory import open_storage
 from incidentops.tools.n8n import request_actions as request_n8n_actions
 from incidentops.tools.zapier import request_actions as request_zapier_actions
 from incidentops.workflows.incident.graph import build_incident_graph
@@ -37,27 +37,27 @@ class IncidentService:
         self,
         settings: Settings,
         *,
-        repo: IncidentRepo | None = None,
+        repo: Repo | None = None,
         dispatcher: Dispatcher | None = None,
         provider: TriageProvider | None = None,
     ) -> None:
         self.settings = settings
-        self.repo = repo or IncidentRepo(settings.database_path)
+        self._storage = open_storage(settings)
+        self.repo: Repo = repo or self._storage.repo
         if dispatcher is not None:
             self._dispatcher = dispatcher
         elif settings.action_provider == "zapier":
             self._dispatcher = request_zapier_actions
         else:
             self._dispatcher = request_n8n_actions
-        self.events = EventBus()
-        self._connection = sqlite3.connect(settings.database_path, check_same_thread=False)
-        self._connection.execute("PRAGMA journal_mode=WAL")
+        self.events = build_event_bus(settings)
         self._graph = build_incident_graph(
-            settings, SqliteSaver(self._connection), provider or build_provider(settings)
+            settings, self._storage.checkpointer, provider or build_provider(settings)
         )
 
     def close(self) -> None:
-        self._connection.close()
+        self.events.close()
+        self._storage.close()
 
     # -- queries ---------------------------------------------------------------------------
     def get(self, run_id: str) -> dict[str, Any]:
@@ -172,24 +172,23 @@ class IncidentService:
             attempts = self.settings.n8n_dispatch_attempts
             backoff = self.settings.n8n_dispatch_backoff
             token = self.settings.n8n_action_token
+        options: dict[str, Any] = {"attempts": attempts, "backoff": backoff, "token": token}
+        if self.settings.webhook_signing_secret:
+            options["signing_secret"] = self.settings.webhook_signing_secret
         update: dict[str, Any]
         if not url:
             update = {"action_dispatch": "not_configured", "status": "succeeded"}
             self.repo.add_audit(run_id, "dispatch:not_configured", actor)
         else:
             try:
+                if not host_allowed(url, self.settings.outbound_allowed_hosts):
+                    raise ValueError("action webhook host is not in OUTBOUND_ALLOWED_HOSTS")
                 with span(
                     "action.dispatch",
                     run_id=run_id,
                     provider=self.settings.action_provider,
                 ):
-                    self._dispatcher(
-                        url,
-                        dict(state),
-                        attempts=attempts,
-                        backoff=backoff,
-                        token=token,
-                    )
+                    self._dispatcher(url, dict(state), **options)
             except (httpx.HTTPError, ValueError) as error:
                 log.error("incident.dispatch_failed", error=str(error))
                 update = {

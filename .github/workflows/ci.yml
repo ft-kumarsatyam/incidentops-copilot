@@ -15,9 +15,33 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     strategy:
       matrix:
         python: ["3.11", "3.13"]
+    env:
+      # fastembed downloads its embedding model on first use; keep it in a cacheable place.
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed-cache
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -26,7 +50,12 @@ jobs:
       - name: Install
         run: |
           uv venv
-          uv pip install -e ".[dev]"
+          uv pip install -e ".[dev,rag]"
+      - name: Cache the embedding model
+        uses: actions/cache@v4
+        with:
+          path: .fastembed-cache
+          key: fastembed-bge-small-en-v1.5
       - name: Lint
         run: |
           .venv/bin/ruff check .
@@ -34,6 +63,13 @@ jobs:
       - name: Type check
         run: .venv/bin/mypy
       - name: Test with coverage
+        # TESTS_STRICT makes a missing service or extra fail instead of skip, so a green run means
+        # every test ran. TEST_DATABASE_URL and TEST_REDIS_URL point at the service containers
+        # (each test gets a throwaway database or a unique key prefix).
+        env:
+          TESTS_STRICT: "1"
+          TEST_DATABASE_URL: postgresql://postgres:test@localhost:5432/postgres
+          TEST_REDIS_URL: redis://localhost:6379/0
         run: .venv/bin/pytest -q --cov
       - name: Evals (offline rules baseline, core + adversarial incidents)
         run: .venv/bin/python -m evals.run_evals --provider rules

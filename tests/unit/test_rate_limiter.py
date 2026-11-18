@@ -1,4 +1,4 @@
-from incidentops.api.middleware import RateLimiter
+from incidentops.api.ratelimit import RateLimiter
 
 
 def test_blocks_after_the_limit_and_recovers_after_the_window() -> None:

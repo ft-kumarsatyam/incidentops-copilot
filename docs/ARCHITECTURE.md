@@ -49,7 +49,7 @@ request to n8n, which owns the integrations.
 | AI layer | `src/incidentops/agents/` | Provider protocol, Claude and rules providers, guardrails, prompts |
 | RoleGraph | `src/incidentops/orchestration/` | Cognitive topology inside `assess` (see [AI_SYSTEM_DESIGN.md](AI_SYSTEM_DESIGN.md)) |
 | Tool broker | `src/incidentops/tools/broker.py` | Unified research evidence + optional MCP read |
-| Persistence | `persistence/repo.py`, LangGraph `SqliteSaver` | Checkpoints, queryable incident index, append-only audit log |
+| Persistence | `persistence/` (`repo.py` SQLite, `postgres.py`, `migrations.py`), LangGraph `SqliteSaver` or `PostgresSaver` | Checkpoints, queryable incident index, append-only audit log |
 | Tools | `src/incidentops/tools/` | Runbook search, GitHub context, monitoring, n8n client with retries |
 | Core | `src/incidentops/core/` | Settings, structured logging, redaction, tracing, domain errors |
 | Web UI | `web/` | Dashboard, incident page, approval flow, settings |
@@ -69,7 +69,7 @@ review     ai (provider, fallback reason), ai_review (critic concerns)
 control    retries, approval, approved_actions, action_dispatch, status, timeline
 ```
 
-Two stores share one SQLite file:
+Two stores share one database (SQLite by default, Postgres when `DATABASE_URL` is set):
 
 - **Checkpoints** (LangGraph `SqliteSaver`) are the source of truth for workflow
   state, keyed by `thread_id = run_id`.

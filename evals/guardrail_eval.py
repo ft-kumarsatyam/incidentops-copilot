@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evals.guardrail_cases import action_cases, property_cases, run_action_case
+from incidentops.core.logging import configure_logging
 
 
 @dataclass
@@ -95,6 +96,7 @@ def gates_met(rows: list[Row], min_block: float, min_benign: float) -> bool:
 
 
 def main() -> int:
+    configure_logging("ERROR", json_output=False)  # the evals feed hostile input on purpose
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--min-block", type=float, default=1.0)
     parser.add_argument("--min-benign", type=float, default=1.0)

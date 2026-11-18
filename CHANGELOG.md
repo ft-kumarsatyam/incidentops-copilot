@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- `make test`, `make cov` and `make check` start a throwaway Postgres and Redis
+  (`compose.test.yaml`) and run in strict mode (`TESTS_STRICT=1`), where a missing service or
+  optional extra fails instead of skipping. CI runs strict too and installs the `rag` extra, so
+  the hybrid-retrieval test runs there. `make test-fast` runs without Docker.
+- Any Python warning now fails the test suite. The only exemption is the Python 3.14
+  `asyncio.iscoroutinefunction` deprecation inside `langsmith`, which has no upstream fix yet.
+
+- Redis (`REDIS_URL`) for the live event stream and rate limiting, so API replicas share both.
+  The event bus publishes through a Redis channel with an auto-reconnecting listener; the rate
+  limiter is an atomic sliding window in Redis. Both fall back to in-process behaviour if Redis
+  is unreachable, and `/ready` reports its state. SQLite-only, single-instance setups are
+  unchanged. Install with the `redis` extra.
+- Postgres backend (`DATABASE_URL`) for the incident read-model, audit log and LangGraph
+  checkpoints, with a pooled connection, fail-fast startup, and an atomic approval claim.
+  SQLite stays the default. Install with the `postgres` extra.
+- Versioned schema migrations (`schema_migrations`) for both backends, with a Postgres advisory
+  lock so replicas starting together apply each migration once.
+- CI runs the repository and service tests against a Postgres service container; the same
+  contract tests run on SQLite and Postgres.
+- Webhook security (opt-in): HMAC-SHA256 signing with replay protection for dispatches to n8n and
+  Zapier (`WEBHOOK_SIGNING_SECRET`), signature check on `POST /incidents`
+  (`INBOUND_SIGNING_SECRET`), and an outbound host allowlist (`OUTBOUND_ALLOWED_HOSTS`).
 - Guardrail layers: output content policy (destructive commands, remote code, exfiltration,
   markup, injection echo, unsanctioned escalation targets), per-type evidence rules, a stricter
   severity cross-check, an input injection scanner (`guardrail_flags`), critic-output validation,
@@ -28,6 +50,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - Personal career-positioning docs and the stale benchmark notes (still in git history).
 
 ### Fixed
+- The evals logged about 150 lines of guardrail and incident events into their output because
+  they never configured logging. They now run quiet.
+- Unclosed SQLite connections in the migration tests.
 - A non-numeric `error_rate` such as `"12%"` crashed triage, and the rules fallback crashed too.
   It is now parsed, or marks impact unverified.
 - A NaN model confidence was clamped to 1.0 and could pass the approval threshold. It now

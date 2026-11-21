@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { KeyRound, Monitor, Moon, Plus, ShieldCheck, Sun } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
+import { useCan, useMe } from "../hooks/useIncidents";
 import { useLiveState } from "../hooks/useLive";
 import { useTheme, type Theme } from "../hooks/useTheme";
 import { api } from "../lib/api";
@@ -17,6 +18,29 @@ const link = ({ isActive }: { isActive: boolean }) =>
     "rounded-lg px-2.5 py-1.5 text-sm font-medium sm:px-3",
     isActive ? "bg-neutralbg" : "text-muted hover:text-fg",
   );
+
+const BUILT_IN_ROLES = ["viewer", "responder", "approver", "admin"];
+
+/** Who you are signed in as: your highest role, and the tenant when it is not the default. */
+function IdentityChip() {
+  const { data: me } = useMe();
+  // `roles` lists built-in roles in ascending order, then custom ones. Show the highest built-in
+  // role, or the first custom role when that is all the caller holds.
+  const builtIn = me?.roles.filter((r) => BUILT_IN_ROLES.includes(r)) ?? [];
+  const role = builtIn.at(-1) ?? me?.roles[0];
+  if (!me || !role) return null;
+  const tenant = me.tenant !== "default" ? ` · ${me.tenant}` : "";
+  return (
+    <span
+      className="bg-neutralbg text-muted rounded-full px-2 py-0.5 text-xs max-sm:sr-only"
+      title={`Signed in as ${me.actor} with: ${me.roles.join(", ")}`}
+      data-testid="identity-chip"
+    >
+      {role}
+      {tenant}
+    </span>
+  );
+}
 
 function LiveIndicator() {
   const state = useLiveState();
@@ -54,6 +78,7 @@ function ThemeToggle() {
 export function Layout() {
   const ready = useQuery({ queryKey: ["ready"], queryFn: api.ready, retry: false, staleTime: 60_000 });
   const offline = ready.isError;
+  const can = useCan();
 
   return (
     <div className="min-h-screen">
@@ -73,13 +98,16 @@ export function Layout() {
             <NavLink to="/" end className={link}>
               Incidents
             </NavLink>
-            <NavLink to="/new" className={link}>
-              <span className="inline-flex items-center gap-1">
-                <Plus className="size-3.5" aria-hidden /> Report
-              </span>
-            </NavLink>
+            {can("incident:create") && (
+              <NavLink to="/new" className={link}>
+                <span className="inline-flex items-center gap-1">
+                  <Plus className="size-3.5" aria-hidden /> Report
+                </span>
+              </NavLink>
+            )}
           </nav>
           <div className="ml-auto flex items-center gap-1">
+            <IdentityChip />
             <LiveIndicator />
             <ThemeToggle />
             <NavLink to="/settings" className="text-muted hover:text-fg rounded-lg p-2" aria-label="Settings" title="Settings">

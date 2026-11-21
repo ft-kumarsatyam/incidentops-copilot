@@ -112,6 +112,10 @@ class Settings(BaseSettings):
     four_eyes_severities: list[str] = Field(default_factory=lambda: ["SEV-1"])
     # When true, whoever opened an incident cannot also approve it.
     forbid_self_approval: bool = False
+    # Actions (rollback, scale, page ...) whose approval needs the incident:decide_high_risk
+    # permission as well as incident:decide. Built-in approvers have both; the point is custom
+    # roles that may decide routine actions but not these. Empty turns the rule off.
+    high_risk_actions: list[str] = Field(default_factory=list)
     # Delete audit entries older than this on `incidentops audit prune`. 0 keeps everything.
     audit_retention_days: int = 0
     # Also write a `read` audit entry for each incident a caller opens.
@@ -127,6 +131,11 @@ class Settings(BaseSettings):
     signature_tolerance_seconds: int = 300
     # Hosts the action dispatcher may call. Empty means any host.
     outbound_allowed_hosts: list[str] = Field(default_factory=list)
+    # The dispatcher never calls link-local (cloud metadata, 169.254.169.254) or unspecified
+    # addresses, whatever the host list says. With this on it also refuses loopback and private
+    # ranges (10/8, 172.16/12, 192.168/16, fc00::/7). Off by default because n8n usually sits on
+    # a private address (compose: http://n8n:5678) or localhost in dev. Turn it on for a public one.
+    outbound_block_private: bool = False
     n8n_dispatch_attempts: int = 3
     n8n_dispatch_backoff: float = 0.5
     zapier_action_webhook_url: str | None = None
@@ -175,6 +184,12 @@ class Settings(BaseSettings):
     # Tenants allowed to call POST /decisions. Empty means every tenant.
     jev_allowed_tenants: list[str] = Field(default_factory=list)
 
+    # Circuit breakers for the model, Jev and the action webhook: after this many consecutive
+    # failures calls fail at once for breaker_reset_seconds instead of each waiting out a timeout.
+    # 0 disables them.
+    breaker_failure_threshold: int = 5
+    breaker_reset_seconds: float = 30.0
+
     # Optional MCP read bridge during research (writes stay on n8n).
     mcp_enabled: bool = False
     mcp_servers: list[dict[str, str]] = Field(default_factory=list)
@@ -195,6 +210,12 @@ class Settings(BaseSettings):
     job_max_attempts: int = 3
     job_retry_backoff_seconds: float = 2.0
     run_timeout_seconds: float = 300.0
+    # Dispatch outbox: an approval records its intent to dispatch before it resumes the run, so a
+    # crash between approving and sending is recovered instead of silently losing the send. A
+    # worker (or the next start) sends it if the approving request did not finish within this many
+    # seconds. n8n's Idempotency-Key makes a rare duplicate send harmless.
+    dispatch_outbox: bool = True
+    dispatch_recovery_seconds: float = 60.0
     max_wait_seconds: float = 30.0  # ceiling for "Prefer: wait=N" on POST /incidents
 
     # Workflow behaviour

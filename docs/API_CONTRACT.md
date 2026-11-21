@@ -38,9 +38,12 @@ Interactive docs are served by the running API at `/docs` (OpenAPI at
 | `GET` | `/queue` | Queue counts and your dead jobs (responder) |
 | `GET` | `/me` | The authenticated identity, roles and permissions |
 | `POST` / `GET` / `DELETE` | `/admin/keys`, `/admin/keys/{id}` | Manage scoped keys for your tenant (admin) |
+| `PUT` / `GET` / `DELETE` | `/admin/roles/{name}`, `/admin/roles` | Define custom roles for your tenant: permissions and optional service globs (`roles:manage`, admin) |
 | `GET` | `/audit` | Search the audit log: `run_id`, `event`, `actor`, `since`, `until`, `limit`, `offset` (admin) |
 | `GET` | `/audit/verify` | Recompute the hash chain (admin) |
 | `GET` | `/audit/export` | The log as NDJSON ending with a chain check (admin) |
+| `POST` | `/decisions` | Ask the Jev decision model typed questions (`noul`, `choice`, `score`); needs `JEV_ENABLED` (responder) |
+| `GET` | `/decisions/status` | Jev configuration, usage counters and circuit state (admin) |
 
 ### `GET /incidents`
 
@@ -68,6 +71,13 @@ Query parameters: `status` (repeatable), `q` (text search, max 200 characters),
 `run_id` is optional; the service generates one. Posting a `run_id` that already
 exists returns the stored run and starts nothing. Secrets and emails in the
 payload are redacted before storage.
+
+**`Idempotency-Key` (optional header, 1 to 128 printable characters).** Send a key you can
+reuse on a retry. The first request creates the run; a repeat with the same key and the same
+report returns that run with `Idempotent-Replayed: true` and starts nothing. The same key with a
+different report (summary, service, reporter, channel, thread or symptoms) is a `409`. Keys are
+per tenant. Send either a key or a `run_id`, not both (`422`). The run id is derived from the key
+(`idem-...`), so this works across replicas with no extra store.
 
 Response (abridged):
 
@@ -144,7 +154,8 @@ stream with `fetch` instead.
 | `200` | Success, including `needs_human` |
 | `401` | Missing or wrong API key |
 | `404` | Unknown `run_id` |
-| `409` | Idempotency key mismatch, run not awaiting approval, invalid `approved_actions`, or nothing to retry |
+| `409` | Decision idempotency key mismatch, `Idempotency-Key` reused with a different report, run not awaiting approval, invalid `approved_actions`, or nothing to retry |
+| `502` | `POST /decisions` only: the decision model call failed |
 | `413` | Body larger than `MAX_BODY_BYTES` |
 | `422` | Request failed validation |
 | `429` | Rate limit exceeded; honor `Retry-After` |

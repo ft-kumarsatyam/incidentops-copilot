@@ -87,4 +87,21 @@ class Repo(Protocol):
 
     def key_touch(self, key_id: str) -> None: ...
 
+    def role_upsert(
+        self,
+        tenant: str,
+        name: str,
+        *,
+        description: str,
+        permissions: list[str],
+        services: list[str],
+        created_by: str,
+    ) -> dict[str, Any]: ...
+
+    def role_get_many(self, tenant: str, names: list[str]) -> list[dict[str, Any]]: ...
+
+    def role_list(self, tenant: str) -> list[dict[str, Any]]: ...
+
+    def role_delete(self, tenant: str, name: str) -> bool: ...
+
     def close(self) -> None: ...

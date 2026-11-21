@@ -20,6 +20,7 @@ from incidentops.persistence.audit import (
 from incidentops.persistence.keys import KeyQueries
 from incidentops.persistence.migrations import migrate_postgres
 from incidentops.persistence.repo import _now
+from incidentops.persistence.roles import RoleQueries
 
 _STATE_COLUMNS = "state_json, created_at, updated_at, tenant_id"
 
@@ -52,7 +53,7 @@ def open_pool(url: str, *, max_size: int = 10) -> Any:
     return pool
 
 
-class PostgresIncidentRepo(AuditQueries, ApprovalQueries, KeyQueries):
+class PostgresIncidentRepo(AuditQueries, ApprovalQueries, KeyQueries, RoleQueries):
     def __init__(self, pool: Any) -> None:
         self._pool = pool
 

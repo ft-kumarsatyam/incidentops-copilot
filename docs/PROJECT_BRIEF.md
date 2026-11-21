@@ -39,7 +39,7 @@ says.
 
 | Decision | What we gave up | Record |
 |---|---|---|
-| SQLite instead of Postgres | One API instance until we migrate | [ADR 002](adr/002-sqlite-checkpointer.md) |
+| SQLite by default, Postgres optional | One API instance with the defaults; replicas need `DATABASE_URL` | [ADR 002](adr/002-sqlite-checkpointer.md) |
 | Rules fallback alongside Claude | A second code path to maintain, but it is also the test baseline | [ADR 003](adr/003-provider-fallback.md) |
 | SSE instead of WebSocket | Server-to-client only, which is all we need | [ADR 004](adr/004-sse-over-websocket.md) |
 | Human approval on every write | Speed. Autonomy is a later, measured step | [ADR 001](adr/001-langgraph-as-orchestrator.md) |
@@ -48,9 +48,9 @@ says.
 
 Measured in this repository, reproducible with `make check`:
 
-- 112 Python tests (94% coverage) and 48 UI tests. mypy and ruff clean.
-- A labeled eval set of 10 incidents, including a prompt-injection case. The offline
-  baseline passes 10 of 10 and runs in CI on every pull request.
+- 1021 Python tests (93% coverage) and 67 web tests. mypy and ruff clean.
+- A labeled eval set of 37 incidents, including prompt-injection cases. The offline
+  baseline passes 37 of 37 and runs in CI on every pull request.
 - Behavior tests for the failure modes that matter: restart while waiting for
   approval, double approval (`409`), a failed dispatch then retry, and a stale index.
 - Exercised end to end in a real browser (sample run, live update in a second tab,

@@ -89,7 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
     key_commands = keys.add_subparsers(dest="key_command", required=True)
     create = key_commands.add_parser("create", help="Create a key (the token is shown once)")
     create.add_argument("--name", required=True)
-    create.add_argument("--roles", required=True, help=f"Comma-separated, from: {', '.join(ROLES)}")
+    create.add_argument(
+        "--roles",
+        required=True,
+        help=f"Comma-separated: {', '.join(ROLES)} and/or custom roles of the tenant",
+    )
     create.add_argument("--tenant", help="Default: DEFAULT_TENANT")
     create.add_argument("--expires-days", type=int)
     listing = key_commands.add_parser("list", help="List keys (never their secrets)")

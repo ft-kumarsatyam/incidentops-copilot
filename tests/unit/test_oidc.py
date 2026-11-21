@@ -91,7 +91,11 @@ def test_the_actor_comes_from_the_configured_claim(signing_key: rsa.RSAPrivateKe
         ("roles", ["viewer", "responder"], {"viewer", "responder"}),
         ("roles", "viewer approver", {"viewer", "approver"}),
         ("roles", "viewer,admin", {"viewer", "admin"}),
-        ("roles", ["root", "viewer", 7], {"viewer"}),  # unknown roles are ignored
+        (
+            "roles",
+            ["root", "viewer", 7, "bad name!"],
+            {"root", "viewer"},
+        ),  # names are kept (they only matter if the tenant defines them); non-names are dropped
         ("roles", None, set()),
     ],
 )

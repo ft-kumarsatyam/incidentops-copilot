@@ -115,6 +115,7 @@ def status(service: Service, principal: Admin) -> dict[str, Any]:
         "injection_threshold": settings.jev_injection_threshold,
         "calls": client.calls if client else 0,
         "errors": client.errors if client else 0,
+        "breaker": client.breaker.snapshot() if client else None,
         "input_tokens": client.input_tokens if client else 0,
         "output_tokens": client.output_tokens if client else 0,
     }

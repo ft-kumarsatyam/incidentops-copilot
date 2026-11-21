@@ -6,6 +6,7 @@ log, and dispatches approved actions to n8n.
 """
 
 import time
+import uuid
 from collections.abc import Callable
 from typing import Any
 
@@ -24,7 +25,9 @@ from incidentops.core.errors import (
 from incidentops.core.logging import bound_context, get_logger
 from incidentops.core.metrics import Metrics
 from incidentops.core.redact import redact
+from incidentops.core.resilience import CircuitBreaker, CircuitOpenError
 from incidentops.core.signing import host_allowed
+from incidentops.core.ssrf import blocked_reason
 from incidentops.core.telemetry import span
 from incidentops.decision import JevAdvisor, JevClient
 from incidentops.persistence.audit import ChainReport
@@ -33,6 +36,7 @@ from incidentops.persistence.factory import open_storage
 from incidentops.persistence.jobs import Job
 from incidentops.security.principal import Principal
 from incidentops.tools.n8n import request_actions as request_n8n_actions
+from incidentops.tools.webhooks import is_transient
 from incidentops.tools.zapier import request_actions as request_zapier_actions
 from incidentops.workflows.incident.graph import build_incident_graph
 from incidentops.workflows.incident.nodes import stable_id
@@ -42,6 +46,8 @@ log = get_logger(__name__)
 Dispatcher = Callable[..., dict[str, Any]]
 
 RUN_JOB = "run"
+# The dispatch outbox: an approval's intent to send its actions (see ``dispatch_outbox``).
+DISPATCH_JOB = "dispatch"
 # Statuses in which the analysis part of a run is finished (it now waits on a person or is over).
 SETTLED = frozenset({"awaiting_approval", "needs_human", "succeeded", "cancelled", "failed"})
 # A run in one of these has not finished its analysis: a caller waiting on it keeps waiting.
@@ -70,18 +76,39 @@ class IncidentService:
         else:
             self._dispatcher = request_n8n_actions
         self.events = build_event_bus(settings)
+        # Fails dispatches fast while n8n or Zapier is down, instead of each approval waiting out
+        # its retries. A refused dispatch leaves the run `failed`; retry-dispatch resends it.
+        self.dispatch_breaker = CircuitBreaker(
+            "dispatch",
+            failure_threshold=settings.breaker_failure_threshold,
+            reset_seconds=settings.breaker_reset_seconds,
+        )
         self.jobs = self._storage.jobs
         # Set by whoever runs workers in this process, to start a queued job without waiting
         # for the next poll.
         self.on_enqueue: Callable[[], None] | None = None
         # One client for the workflow advisor and POST /decisions, so usage is counted together.
         self.jev: JevClient | None = jev or (JevClient(settings) if settings.jev_enabled else None)
+        triage_provider = provider or build_provider(settings)
         self._graph = build_incident_graph(
             settings,
             self._storage.checkpointer,
-            provider or build_provider(settings),
+            triage_provider,
             advisor=JevAdvisor(self.jev, settings) if self.jev else None,
         )
+        self.metrics.watch_breaker(self.dispatch_breaker)
+        self.metrics.watch_breaker(getattr(triage_provider, "breaker", None))
+        if self.jev is not None:
+            jev_client = self.jev
+            self.metrics.watch_breaker(jev_client.breaker)
+            self.metrics.watch_jev(
+                lambda: {
+                    "calls": jev_client.calls,
+                    "errors": jev_client.errors,
+                    "input_tokens": jev_client.input_tokens,
+                    "output_tokens": jev_client.output_tokens,
+                }
+            )
 
     def _invoke(self, graph_input: Any, config: Any) -> Any:
         """Run the graph, persisting checkpoints as ``CHECKPOINT_DURABILITY`` says."""
@@ -248,6 +275,9 @@ class IncidentService:
 
     def handle_job(self, job: Job) -> None:
         """Run one queued analysis. Raises on failure so the worker retries it with backoff."""
+        if job.kind == DISPATCH_JOB:
+            self._handle_dispatch_job(job)
+            return
         if job.kind != RUN_JOB:
             raise ValueError(f"unknown job kind {job.kind!r}")
         clean: dict[str, Any] = job.payload["incident"]
@@ -276,8 +306,32 @@ class IncidentService:
             log.info("incident.created", status=state["status"], severity=state.get("severity"))
             self.metrics.incident_created(state.get("status"), state.get("severity"))
 
+    def _handle_dispatch_job(self, job: Job) -> None:
+        """Send an approval's actions that the approving request never finished sending. Skips
+        quietly when the work is already done. Raises when the send fails, so the worker retries."""
+        state = self.get(job.run_id)
+        if state.get("approval") != "approved" or state.get("action_dispatch") in (
+            "sent",
+            "not_configured",
+        ):
+            return
+        actor = str(job.payload.get("actor", "api"))
+        with bound_context(run_id=job.run_id, attempt=job.attempts):
+            self.repo.add_audit(
+                job.run_id, "dispatch:recovered", "worker", {"attempt": job.attempts}
+            )
+            result = self._dispatch(job.run_id, state, actor)
+        if result.get("action_dispatch") == "failed":
+            raise RuntimeError("dispatch failed")
+
     def job_failed(self, job: Job, error: str, outcome: str) -> None:
         """Worker callback after a failed attempt. ``outcome`` is 'queued' (retry) or 'dead'."""
+        if job.kind == DISPATCH_JOB:
+            event = "dispatch:retry" if outcome == "queued" else "dispatch:dead"
+            self.repo.add_audit(
+                job.run_id, event, "worker", {"attempt": job.attempts, "error": error[:500]}
+            )
+            return  # the run is already `failed`; retry-dispatch resends a dead one
         if outcome == "queued":
             self.repo.claim(job.run_id, "running", to="queued", visible=True)
             self.repo.add_audit(
@@ -291,6 +345,10 @@ class IncidentService:
         """Worker callback for a job whose worker vanished on its final attempt."""
         if kind == RUN_JOB:
             self._mark_errored(run_id, "the worker stopped responding on the final attempt")
+        elif kind == DISPATCH_JOB:
+            self.repo.add_audit(
+                run_id, "dispatch:dead", "worker", {"error": "worker lost its lease"}
+            )
 
     def retry_run(
         self, run_id: str, *, actor: str = "api", tenant: str | None = None
@@ -369,8 +427,10 @@ class IncidentService:
         elif not chosen:
             raise IncidentConflictError("approve at least one action, or reject the incident")
         approvers: list[str] = []
+        self._check_scope(run_id, principal, state)
         if decision == "approved":
             self._check_separation(run_id, principal)
+            self._check_risk(run_id, principal, state, chosen)
             needed = self._approvals_required(state)
             if needed > 1:
                 approvers = self._record_approval(run_id, principal, chosen, needed)
@@ -381,12 +441,15 @@ class IncidentService:
                 f"run is not awaiting approval (status: {self.get(run_id)['status']})"
             )
         with bound_context(run_id=run_id):
+            armed = decision == "approved" and self._arm_dispatch(run_id, actor)
             try:
                 self._invoke(
                     Command(resume={"decision": decision, "approved_actions": chosen}),
                     self._config(run_id),
                 )
             except Exception:
+                if armed:
+                    self.jobs.finish(DISPATCH_JOB, run_id)  # nothing was approved after all
                 self.repo.release(run_id, "awaiting_approval")
                 raise
             state = self._sync(run_id)
@@ -398,7 +461,49 @@ class IncidentService:
             self.metrics.decision(decision)
             if decision == "approved":
                 state = self._dispatch(run_id, state, actor)
+                if armed:
+                    self.jobs.finish(DISPATCH_JOB, run_id)
         return state
+
+    def _deny(self, run_id: str, principal: Principal, reason: str) -> None:
+        self.repo.add_audit(
+            run_id,
+            "auth:forbidden",
+            principal.actor,
+            {"reason": reason, "roles": sorted(principal.roles)},
+        )
+        raise AccessDeniedError(reason)
+
+    def _check_scope(self, run_id: str, principal: Principal | None, state: dict[str, Any]) -> None:
+        """A custom role may be limited to some services: it can then decide only those."""
+        service = str(state.get("service") or "")
+        if principal is not None and not principal.can_on("incident:decide", service):
+            self._deny(run_id, principal, f"your role may not decide incidents for {service!r}")
+
+    def _check_risk(
+        self,
+        run_id: str,
+        principal: Principal | None,
+        state: dict[str, Any],
+        chosen: list[str],
+    ) -> None:
+        """Approving a high-risk action (``HIGH_RISK_ACTIONS``) needs its own permission."""
+        risky = set(self.settings.high_risk_actions)
+        if principal is None or not risky:
+            return
+        types = {
+            str(item.get("type"))
+            for item in state.get("action_items", [])
+            if item.get("description") in chosen
+        }
+        hit = sorted(types & risky)
+        service = str(state.get("service") or "")
+        if hit and not principal.can_on("incident:decide_high_risk", service):
+            self._deny(
+                run_id,
+                principal,
+                f"approving {', '.join(hit)} needs the incident:decide_high_risk permission",
+            )
 
     def _check_separation(self, run_id: str, principal: Principal | None) -> None:
         """Whoever opened an incident may not approve it, when FORBID_SELF_APPROVAL is on."""
@@ -442,7 +547,54 @@ class IncidentService:
         if not self.repo.claim(run_id, "failed"):
             raise IncidentConflictError("dispatch retry already in progress")
         with bound_context(run_id=run_id):
-            return self._dispatch(run_id, state, actor)
+            armed = self._arm_dispatch(run_id, actor)
+            result = self._dispatch(run_id, state, actor)
+            if armed:
+                self.jobs.finish(DISPATCH_JOB, run_id)
+            return result
+
+    def _dispatch_url(self) -> str | None:
+        if self.settings.action_provider == "zapier":
+            return self.settings.zapier_action_webhook_url
+        return self.settings.n8n_action_webhook_url
+
+    def _arm_dispatch(self, run_id: str, actor: str) -> bool:
+        """Record the intent to dispatch before doing it (the outbox). Returns whether it was
+        recorded; with no webhook configured there is nothing external to lose."""
+        if not self.settings.dispatch_outbox or not self._dispatch_url():
+            return False
+        self.jobs.arm(
+            DISPATCH_JOB,
+            run_id,
+            {"actor": actor},
+            delay=self.settings.dispatch_recovery_seconds,
+            max_attempts=self.settings.job_max_attempts,
+        )
+        return True
+
+    def recover_dispatches(self, *, drain: bool) -> int:
+        """At startup, whoever armed a pending dispatch is gone: make those jobs due now. With
+        ``drain`` (no worker pool in this process) also send them here. Returns how many ran."""
+        self.jobs.expedite(DISPATCH_JOB)
+        if not drain:
+            return 0
+        ran, worker = 0, f"recovery-{uuid.uuid4().hex[:6]}"
+        while ran < 100 and (job := self.jobs.claim(worker, self.settings.job_lease_seconds)):
+            ran += 1
+            if job.kind != DISPATCH_JOB:
+                # A run job belongs to a worker pool, not to this sweep: hand it back untouched.
+                self.jobs.fail(job.id, worker, "not a dispatch job", 0.0)
+                continue
+            try:
+                self.handle_job(job)
+            except Exception as error:
+                # At least a second, so this sweep does not claim the same failing job again.
+                retry_in = max(1.0, self.settings.job_retry_backoff_seconds)
+                outcome = self.jobs.fail(job.id, worker, str(error), retry_in)
+                self.job_failed(job, str(error), outcome or "queued")
+            else:
+                self.jobs.complete(job.id, worker)
+        return ran
 
     # -- internals -------------------------------------------------------------------------
     @staticmethod
@@ -486,13 +638,26 @@ class IncidentService:
             try:
                 if not host_allowed(url, self.settings.outbound_allowed_hosts):
                     raise ValueError("action webhook host is not in OUTBOUND_ALLOWED_HOSTS")
+                refusal = blocked_reason(url, block_private=self.settings.outbound_block_private)
+                if refusal:
+                    raise ValueError(f"action webhook refused: {refusal}")
                 with span(
                     "action.dispatch",
                     run_id=run_id,
                     provider=self.settings.action_provider,
                 ):
-                    self._dispatcher(url, dict(state), **options)
-            except (httpx.HTTPError, ValueError) as error:
+                    if not self.dispatch_breaker.allow():
+                        raise CircuitOpenError("dispatch")
+                    try:
+                        self._dispatcher(url, dict(state), **options)
+                    except Exception as error:
+                        if is_transient(error):
+                            self.dispatch_breaker.record_failure()
+                        else:
+                            self.dispatch_breaker.record_success()
+                        raise
+                    self.dispatch_breaker.record_success()
+            except (httpx.HTTPError, ValueError, CircuitOpenError) as error:
                 log.error("incident.dispatch_failed", error=str(error))
                 update = {
                     "action_dispatch": "failed",

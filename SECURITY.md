@@ -19,9 +19,11 @@ the text is hostile and the model can be wrong.
 | Prompt injection in an incident report | Text is fenced in an `<incident>` block with `<` escaped; the model has no tools that write; its output is restricted to a closed action list and checked in code |
 | The model invents an action or a fact | Every action must cite evidence or a runbook; rollback needs a deploy; severity is checked against measurements |
 | An unapproved write | Writes happen only in n8n, only after `approved` through the API, and only for the chosen subset of actions |
-| Double submit or replay | Idempotency keys, an atomic claim on the run, and an n8n gate marked done only after success |
+| Double submit or replay | Idempotency keys (a run id, or the `Idempotency-Key` header on create), an atomic claim on the run, and an n8n gate marked done only after success |
+| The action webhook pointed at an internal target (SSRF) | Optional host allowlist; link-local and unspecified addresses (cloud metadata) always refused after resolving the name; `OUTBOUND_BLOCK_PRIVATE` also refuses loopback and private ranges; no redirects followed |
+| A slow or down dependency stalling every request | Circuit breakers for the model, Jev and the action webhook fail fast and recover with one trial call |
 | Unauthenticated API access | A credential is required outside dev (SSO token, scoped key or shared key), constant-time comparison, startup refuses to run without one, failures are audited |
-| A caller doing more than their role allows | RBAC (viewer, responder, approver, admin) enforced per route; proposing and approving are different roles; denials are audited |
+| A caller doing more than their role allows | RBAC (viewer, responder, approver, admin, plus per-tenant custom roles resolved on every request) enforced per route; approving can be limited to some services and high-risk actions need their own permission; proposing and approving are different roles; denials are audited |
 | Forged identity in the audit log | For SSO tokens and scoped keys the actor comes from the verified identity; `X-Actor` is ignored for them |
 | One person approving a SEV-1 alone | Optional four-eyes (`FOUR_EYES_APPROVALS`) with distinct named approvers; optional no-self-approval |
 | Forged or confused tokens | OIDC: signature against the issuer's JWKS, issuer, mandatory audience, expiry; asymmetric algorithms only, so `none` and HMAC key-confusion tokens are refused |
@@ -47,15 +49,17 @@ the text is hostile and the model can be wrong.
   redirect-based login put an OIDC-aware proxy in front.
 - **Authentication failures write to the audit log**, bounded by the rate limiter. A flood from
   many addresses can still grow it; alert on `auth:denied` volume and prune.
-- **Slack signatures are not verified** in the template workflow. Add this before
-  exposing the intake webhook.
+- **Slack signatures are checked only when enabled.** The n8n template verifies them when
+  `SLACK_SIGNING_SECRET` is set (`n8n/src/slack-verify.js`). Turn it on before exposing
+  the intake webhook.
 - **The API key lives in the browser** once entered in Settings: in session
   storage by default, in local storage if the user ticks "remember". Treat the
   UI as an internal tool, and serve it over HTTPS.
 - **The rate limiter is per process**, keyed by client IP and API key.
 - **Redaction is pattern based.** It catches common token shapes and emails, not
   every possible secret.
-- **n8n's idempotency gate uses workflow static data**, fine for one instance.
+- **n8n's idempotency gate** uses a shared Redis claim when `N8N_REDIS_URL` is set (works across
+  n8n instances) and workflow static data otherwise, which is fine for one instance only.
 - SQLite is unencrypted at rest. Use disk encryption and restrict file permissions.
 
 ## Hardening checklist

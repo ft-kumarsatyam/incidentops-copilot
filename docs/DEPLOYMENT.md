@@ -51,6 +51,44 @@ The token is printed once; only a hash is stored. Admins can also use `POST /adm
 `GET /admin/keys` and `DELETE /admin/keys/{id}` for their own tenant. Give integrations such as
 n8n a key with the least role they need.
 
+**Custom roles and attribute rules.** Admins define roles for their tenant with `PUT /admin/roles/{name}`
+(`{"permissions": [...], "services": ["pay-*"]}`; empty `services` means every service), then give them to
+keys (`--roles viewer,payments` or `POST /admin/keys`) or to SSO users through the roles claim. A role
+only adds permissions and is looked up on every request, so editing or deleting it applies
+immediately. A role limited to some services can approve or reject only incidents of those services.
+`HIGH_RISK_ACTIONS=["rollback","scale"]` makes approving those action types need the extra
+`incident:decide_high_risk` permission (approvers have it; a custom role must list it). Denials are
+`403` and audited. See [ADR 013](adr/013-custom-roles-and-abac.md).
+
+**Decision model (Jev).** `JEV_ENABLED=true` with `JEV_API_KEY` turns on two uses of TypeSafe Jev.
+In triage it is an advisor: a confident disagreement on severity adds a conflict, and a suspected
+injection adds a guardrail flag, so a person looks; it never lowers a severity or waives a gate,
+and if Jev is down triage carries on without it. `POST /decisions` lets callers ask it typed
+questions: it needs the `decision:invoke` permission (responder and up), `GET /decisions/status`
+needs `decision:admin`, and `JEV_ALLOWED_TENANTS` limits which tenants may call. Text is redacted
+before it leaves the process, owner and reporter names are never sent, and the audit log records
+who asked, which questions and the token cost, never the text. See
+[ADR 011](adr/011-jev-decision-advisor.md).
+
+**Dispatch outbox.** Approving records an intent to dispatch (a `dispatch` job) before the run
+resumes and closes it after the send. If the API dies in between, a worker sends it once
+`DISPATCH_RECOVERY_SECONDS` (default 60) have passed, or the next start sends it at once (right
+at startup when there are no workers). A rare duplicate send is possible; n8n's `Idempotency-Key`
+makes it harmless. With `EXECUTION_MODE=sync` and no worker, recovery happens only at the next
+start. `DISPATCH_OUTBOX=false` turns it off. Recovered, retried and dead dispatches appear in the
+audit trail as `dispatch:recovered`, `dispatch:retry` and `dispatch:dead`.
+
+**Circuit breakers and outbound limits.** After `BREAKER_FAILURE_THRESHOLD` (default 5) consecutive
+failures the model, Jev and the action webhook each stop being called for `BREAKER_RESET_SECONDS`
+(default 30), then one trial call decides whether to close again; 0 disables them. Only
+unhealthy-dependency failures count (timeouts, connection errors, 5xx, 429), not a rejected
+request or key. State and counters are on `/metrics` (`incidentops_circuit_*`,
+`incidentops_jev_*`) and in `GET /decisions/status`. The dispatcher never calls link-local or
+unspecified addresses (cloud metadata at `169.254.169.254`); set `OUTBOUND_BLOCK_PRIVATE=true` to
+refuse loopback and private ranges too, which is right when n8n has a public address. Pin
+`OUTBOUND_ALLOWED_HOSTS` as well: the address check cannot stop a DNS answer that changes between
+the check and the connection.
+
 **OIDC / SSO** (`pip install 'incidentops[oidc]'`; the image includes it). Set `OIDC_ISSUER` and
 `OIDC_AUDIENCE`; keys are discovered from `{issuer}/.well-known/openid-configuration` or set
 `OIDC_JWKS_URL`. Tokens must be signed with RS256/ES256 (never HMAC or `none`), carry the audience
@@ -166,7 +204,9 @@ The runbook index is derived from `runbooks/` and can be rebuilt with
 
 ## Capacity and limits
 
-- **One API instance.** SQLite plus the in-process event bus assume it.
+- **One API instance with the defaults.** SQLite plus the in-process event bus assume it. Set
+  `DATABASE_URL` and `REDIS_URL` to run several replicas and workers; extra replicas help
+  little because the per-tenant audit-chain lock is shared (see the load-test report).
 - `RATE_LIMIT_PER_MINUTE` is per client IP plus API key, and per process. A reverse proxy is the real defense.
 - `MAX_BODY_BYTES` caps request size (default 256 KB).
 - Claude calls are bounded by `AI_TIMEOUT_SECONDS` and `AI_MAX_OUTPUT_TOKENS`, and

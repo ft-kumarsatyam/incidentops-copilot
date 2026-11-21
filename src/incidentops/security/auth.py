@@ -1,11 +1,12 @@
 """Turn the credentials on a request into a Principal."""
 
+import dataclasses
 import hmac
 from typing import Protocol
 
 from incidentops.core.config import Settings
 from incidentops.persistence.base import Repo
-from incidentops.security.principal import ROLES, Principal
+from incidentops.security.principal import ROLES, Grant, Principal
 
 
 class AuthError(Exception):
@@ -49,6 +50,33 @@ class Authenticator:
         authorization: str | None = None,
         api_key: str | None = None,
         actor_header: str | None = None,
+    ) -> Principal:
+        return self._with_grants(
+            self._authenticate(
+                authorization=authorization, api_key=api_key, actor_header=actor_header
+            )
+        )
+
+    def _with_grants(self, principal: Principal) -> Principal:
+        """Turn the custom role names the identity carries into the permissions they grant in
+        the principal's own tenant. A name the tenant has not defined (or has since deleted)
+        grants nothing, so a token cannot reach for another tenant's role."""
+        custom = sorted(role for role in principal.roles if role not in ROLES)
+        if not custom:
+            return principal
+        grants = tuple(
+            Grant(permission, tuple(row["services"]), row["name"])
+            for row in self._repo.role_get_many(principal.tenant, custom)
+            for permission in row["permissions"]
+        )
+        return dataclasses.replace(principal, grants=grants)
+
+    def _authenticate(
+        self,
+        *,
+        authorization: str | None,
+        api_key: str | None,
+        actor_header: str | None,
     ) -> Principal:
         from incidentops.security import apikeys  # local: apikeys imports AuthError from here
 

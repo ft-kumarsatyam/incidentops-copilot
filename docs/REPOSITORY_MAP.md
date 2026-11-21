@@ -59,6 +59,7 @@ agents/        Provider and specialist experiments
 3. [RAG_SYSTEM_DESIGN.md](RAG_SYSTEM_DESIGN.md) — deep dive on retrieval
 4. [AI_DESIGN.md](AI_DESIGN.md) — agents + guardrails (detail)
 5. [ARCHITECTURE.md](ARCHITECTURE.md) — runtime and state
+   ([END_TO_END_ARCHITECTURE.md](END_TO_END_ARCHITECTURE.md) — full picture, RBAC, roadmap)
 6. [adr/](adr/) — decisions with evidence
 
 ## Commands cheat sheet

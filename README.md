@@ -563,6 +563,7 @@ Copy [.env.example](.env.example). The settings you will touch most:
 | `RUN_TIMEOUT_SECONDS` | `300` | Upper bound for one analysis attempt |
 | `OIDC_ISSUER` / `OIDC_AUDIENCE` | | Accept SSO access tokens from your identity provider (needs the `oidc` extra) |
 | `FOUR_EYES_APPROVALS` | `1` | Distinct named approvers required for `FOUR_EYES_SEVERITIES` (default SEV-1) |
+| `HIGH_RISK_ACTIONS` | `[]` | Action types (e.g. `["rollback","scale"]`) whose approval needs the `incident:decide_high_risk` permission |
 | `FORBID_SELF_APPROVAL` | `false` | Whoever opened an incident cannot approve it |
 | `DEFAULT_TENANT` | `default` | Tenant for the shared key and for tokens without a tenant claim |
 | `RATE_LIMIT_PER_MINUTE` | `120` | Per-client request limit |
@@ -608,6 +609,7 @@ Full map: [docs/REPOSITORY_MAP.md](docs/REPOSITORY_MAP.md).
 | [RAG system design](docs/RAG_SYSTEM_DESIGN.md) | Chunking, rewrite, hybrid, eval metrics |
 | [Guardrails](docs/GUARDRAILS.md) | The safety layer matrix |
 | [Architecture](docs/ARCHITECTURE.md) | Components, state, lifecycle, failure behavior |
+| [End-to-end architecture](docs/END_TO_END_ARCHITECTURE.md) | Full system, RBAC, data model, deployment, failure modes, roadmap |
 | [AI design](docs/AI_DESIGN.md) | What the model may and may not do, evals, fallback |
 | [API contract](docs/API_CONTRACT.md) | Endpoints, SSE, errors |
 | [Integrations](docs/INTEGRATIONS.md) | Slack, email, n8n, MCP |

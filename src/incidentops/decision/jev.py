@@ -14,6 +14,7 @@ from incidentops.agents.schemas import TriageContext
 from incidentops.core.config import Settings
 from incidentops.core.logging import get_logger
 from incidentops.core.redact import redact
+from incidentops.core.resilience import CircuitBreaker
 
 log = get_logger(__name__)
 
@@ -86,6 +87,11 @@ class JevClient:
             timeout=settings.jev_timeout_seconds,
             transport=transport,
         )
+        self.breaker = CircuitBreaker(
+            "jev",
+            failure_threshold=settings.breaker_failure_threshold,
+            reset_seconds=settings.breaker_reset_seconds,
+        )
         self.calls = 0
         self.errors = 0
         self.input_tokens = 0
@@ -101,6 +107,8 @@ class JevClient:
     def evaluate(self, state: Any, questions: dict[str, dict[str, Any]]) -> dict[str, Any]:
         """Return the raw response (``model``, ``answers``, ``usage``). The state is redacted."""
         body = {"model": self._model, "state": redact(state), "questions": questions}
+        if not self.breaker.allow():
+            raise JevError("jev circuit open")
         self.calls += 1
         try:
             response = self._http.post("/v1/systemone", json=body)
@@ -108,13 +116,22 @@ class JevClient:
             data = response.json()
         except httpx.HTTPStatusError as error:
             self.errors += 1
-            raise JevError(f"jev returned HTTP {error.response.status_code}") from error
+            status = error.response.status_code
+            # 5xx and 429 mean Jev is unhealthy; a 4xx is about our request or key, not an outage.
+            if status >= 500 or status == 429:
+                self.breaker.record_failure()
+            else:
+                self.breaker.record_success()
+            raise JevError(f"jev returned HTTP {status}") from error
         except (httpx.HTTPError, ValueError) as error:
             self.errors += 1
+            self.breaker.record_failure()
             raise JevError(f"jev call failed: {type(error).__name__}") from error
         if not isinstance(data, dict) or not isinstance(data.get("answers"), dict):
             self.errors += 1
+            self.breaker.record_failure()
             raise JevError("jev returned an unexpected response")
+        self.breaker.record_success()
         usage = data.get("usage") or {}
         self.input_tokens += int(usage.get("input_tokens") or 0)
         self.output_tokens += int(usage.get("output_tokens") or 0)

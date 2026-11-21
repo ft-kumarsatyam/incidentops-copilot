@@ -71,6 +71,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "app.start", env=settings.incidentops_env, execution=settings.execution_mode
         )
         pool = start_workers(service)
+        try:
+            # An approval that crashed before it finished sending is sent now (by the workers
+            # when there are some, otherwise right here).
+            service.recover_dispatches(drain=pool is None)
+        except Exception as error:  # never block startup on recovery
+            get_logger(__name__).error("dispatch.recovery_failed", error=type(error).__name__)
         yield
         if pool is not None:
             pool.stop()
@@ -96,9 +102,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "X-Actor",
                 "Content-Type",
                 "Prefer",
+                "Idempotency-Key",
                 "X-Request-ID",
             ],
-            expose_headers=["X-Total-Count", "X-Request-ID"],
+            expose_headers=["X-Total-Count", "X-Request-ID", "Idempotent-Replayed"],
         )
     install_middleware(app, settings, metrics)
     install_error_handlers(app)

@@ -163,10 +163,28 @@ CREATE TABLE IF NOT EXISTS approvals (
 """
 
 
+def _v4(text: str) -> str:
+    """Custom roles per tenant (the built-in four are not stored)."""
+    return f"""
+CREATE TABLE IF NOT EXISTS roles (
+    tenant_id {text} NOT NULL,
+    name {text} NOT NULL,
+    description {text} NOT NULL DEFAULT '',
+    permissions {text} NOT NULL,
+    services {text} NOT NULL DEFAULT '',
+    created_by {text} NOT NULL,
+    created_at {text} NOT NULL,
+    updated_at {text} NOT NULL,
+    PRIMARY KEY (tenant_id, name)
+);
+"""
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "initial schema", _V1_SQLITE, _V1_POSTGRES),
     Migration(2, "job queue", _V2_SQLITE, _V2_POSTGRES),
     Migration(3, "identity and governance", _v3("INTEGER", "TEXT"), _v3("BIGINT", "TEXT")),
+    Migration(4, "custom roles", _v4("TEXT"), _v4("TEXT")),
 )
 
 

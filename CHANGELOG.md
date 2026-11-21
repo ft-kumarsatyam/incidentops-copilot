@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- Custom roles per tenant (`roles` table, migration 4; `PUT/GET/DELETE /admin/roles`, permission `roles:manage`)
+  and attribute rules on approval: a role limited to some services (`checkout-*`) can decide only those,
+  and `HIGH_RISK_ACTIONS` need the new `incident:decide_high_risk` permission. Keys and SSO tokens carry
+  role names that are resolved on every request. See ADR 013.
+- Dispatch outbox: approving records its intent to dispatch (a `dispatch` job in the existing
+  queue) before resuming the run, so a crash between approving and sending is recovered by a worker
+  or the next start instead of silently losing the send (`DISPATCH_OUTBOX`,
+  `DISPATCH_RECOVERY_SECONDS`). New job-store methods `arm`, `finish` and `expedite`.
+- Circuit breakers (`BREAKER_FAILURE_THRESHOLD`, `BREAKER_RESET_SECONDS`) around the model, Jev and
+  the action webhook, exported as `incidentops_circuit_*` metrics, plus `incidentops_jev_*` counters.
+- `Idempotency-Key` header on `POST /incidents`: a retry returns the same run (`Idempotent-Replayed`),
+  a reused key with a different report is a 409. Works across replicas, no extra store.
+- SSRF guard for the action webhook (`core/ssrf.py`): link-local and unspecified addresses always
+  refused, `OUTBOUND_BLOCK_PRIVATE` for loopback and private ranges.
+- Role-aware UI: the Report link, samples and report page are hidden from roles that cannot create
+  incidents, and the header shows your role and tenant.
+- `docs/END_TO_END_ARCHITECTURE.md` (context, components, request sequence, RBAC, data model,
+  deployment, failure modes, security, checklist coverage and a tiered roadmap) and ADR 012.
 - Jev (TypeSafe System One) decision model as an advisor: `JEV_ENABLED`, `JEV_API_KEY`, `POST /decisions`
   and `GET /decisions/status`, with new RBAC permissions `decision:invoke` (responder) and
   `decision:admin` (admin), a tenant allow-list, and audited calls. In triage it only adds conflicts

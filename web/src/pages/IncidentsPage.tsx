@@ -5,7 +5,7 @@ import { ConfidenceMeter, SeverityBadge, StatusBadge } from "../components/Badge
 import { QueryError } from "../components/QueryError";
 import { SamplePicker } from "../components/SamplePicker";
 import { EmptyState, Skeleton } from "../components/States";
-import { useIncidents } from "../hooks/useIncidents";
+import { useCan, useIncidents } from "../hooks/useIncidents";
 import { cn } from "../lib/cn";
 import { inTab, matchesQuery, relativeTime, sortIncidents, statusMeta, type Tab } from "../lib/format";
 import type { Incident } from "../lib/types";
@@ -50,6 +50,7 @@ function Row({ incident }: { incident: Incident }) {
 
 export function IncidentsPage() {
   const { data, isPending, error, refetch } = useIncidents();
+  const canReport = useCan()("incident:create");
   const [tab, setTab] = useState<Tab>("open");
   const [query, setQuery] = useState("");
 
@@ -80,12 +81,14 @@ export function IncidentsPage() {
               : "Loading…"}
           </p>
         </div>
-        <Link
-          to="/new"
-          className="bg-brand text-brandfg hover:bg-brandhover inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
-        >
-          <Plus className="size-4" aria-hidden /> Report an incident
-        </Link>
+        {canReport && (
+          <Link
+            to="/new"
+            className="bg-brand text-brandfg hover:bg-brandhover inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
+          >
+            <Plus className="size-4" aria-hidden /> Report an incident
+          </Link>
+        )}
       </div>
 
       {error ? (
@@ -99,9 +102,11 @@ export function IncidentsPage() {
       ) : data.length === 0 ? (
         <div className="space-y-6">
           <EmptyState title="No incidents yet">
-            Report one, or try a sample to see how the agents investigate and propose a response.
+            {canReport
+              ? "Report one, or try a sample to see how the agents investigate and propose a response."
+              : "Incidents will appear here when someone reports one."}
           </EmptyState>
-          <SamplePicker />
+          {canReport && <SamplePicker />}
         </div>
       ) : (
         <>

@@ -1,8 +1,9 @@
 """Incident endpoints."""
 
+import hashlib
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -14,6 +15,7 @@ from incidentops.api.deps import (
 )
 from incidentops.api.events import event_stream
 from incidentops.core.config import Settings
+from incidentops.core.redact import redact
 from incidentops.security import Principal
 from incidentops.workflows.incident.service import IN_PROGRESS, IncidentService
 
@@ -28,6 +30,12 @@ Creator = Annotated[Principal, Depends(require("incident:create"))]
 Retrier = Annotated[Principal, Depends(require("incident:retry"))]
 Approver = Annotated[Principal, Depends(require("incident:decide"))]
 RunIdPath = Annotated[str, Path(pattern=RUN_ID)]
+IdempotencyKey = Annotated[
+    str | None,
+    Header(alias="Idempotency-Key", min_length=1, max_length=128, pattern=r"^[\x21-\x7e]+$"),
+]
+# What must match for a repeated Idempotency-Key to count as the same request.
+_IDEMPOTENT_FIELDS = ("summary", "service", "reporter", "channel_id", "thread_ts", "symptoms")
 
 
 class IncidentRequest(BaseModel):
@@ -115,6 +123,20 @@ def list_incidents(
     return items
 
 
+def _idempotent_run_id(tenant: str, key: str) -> str:
+    """A run id derived from the caller's key, salted with the tenant so two tenants that happen
+    to pick the same key never collide."""
+    return "idem-" + hashlib.sha256(f"{tenant}\n{key}".encode()).hexdigest()[:32]
+
+
+def _same_request(stored: dict[str, Any], request: dict[str, Any]) -> bool:
+    clean = redact(request)  # the stored run was redacted before it was saved
+    return all(
+        stored.get(name) == clean.get(name, "" if name != "symptoms" else [])
+        for name in _IDEMPOTENT_FIELDS
+    )
+
+
 def _wait_seconds(prefer: str | None, ceiling: float) -> float:
     """Seconds asked for by ``Prefer: wait=N`` (RFC 7240), capped. 0 when absent or malformed."""
     for token in (prefer or "").split(","):
@@ -146,10 +168,26 @@ def create_incident(
     settings: Annotated[Settings, Depends(get_settings)],
     response: Response,
     prefer: Annotated[str | None, Header()] = None,
+    idempotency_key: IdempotencyKey = None,
 ) -> dict[str, Any]:
-    state = service.create(
-        request.model_dump(exclude_none=True), actor=principal.actor, tenant=principal.tenant
-    )
+    payload = request.model_dump(exclude_none=True)
+    if idempotency_key:
+        if request.run_id:
+            raise HTTPException(
+                status_code=422, detail="send either run_id or an Idempotency-Key, not both"
+            )
+        run_id = _idempotent_run_id(principal.tenant, idempotency_key)
+        stored = service.repo.get(run_id, tenant=principal.tenant)
+        if stored is not None:
+            if not _same_request(stored, payload):
+                raise HTTPException(
+                    status_code=409,
+                    detail="this Idempotency-Key was already used with a different request",
+                )
+            response.headers["Idempotent-Replayed"] = "true"
+            return service.get(run_id, principal.tenant)
+        payload["run_id"] = run_id
+    state = service.create(payload, actor=principal.actor, tenant=principal.tenant)
     if state.get("status") in IN_PROGRESS:
         wait = _wait_seconds(prefer, settings.max_wait_seconds)
         if wait:

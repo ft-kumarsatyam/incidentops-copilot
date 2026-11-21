@@ -23,6 +23,7 @@ from incidentops.persistence.audit import (
 )
 from incidentops.persistence.keys import KeyQueries
 from incidentops.persistence.migrations import migrate_sqlite
+from incidentops.persistence.roles import RoleQueries
 
 _STATE_COLUMNS = "state_json, created_at, updated_at, tenant_id"
 
@@ -31,7 +32,7 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds")
 
 
-class IncidentRepo(AuditQueries, ApprovalQueries, KeyQueries):
+class IncidentRepo(AuditQueries, ApprovalQueries, KeyQueries, RoleQueries):
     def __init__(self, database: Path) -> None:
         self.database = database
         database.parent.mkdir(parents=True, exist_ok=True)

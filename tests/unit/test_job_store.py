@@ -194,3 +194,62 @@ def test_stats_on_an_empty_queue(store: JobStore) -> None:
         "dead": 0,
         "oldest_queued_seconds": 0.0,
     }
+
+
+# -- the outbox: arm, finish, expedite ------------------------------------------------------
+def test_arm_creates_a_delayed_job_that_only_becomes_claimable_when_due(store: JobStore) -> None:
+    store.arm("dispatch", "a", {"actor": "x"}, delay=60, now=T0)
+
+    assert store.claim("w1", LEASE, now=T0 + 30) is None  # the caller is still doing the work
+    job = store.claim("w1", LEASE, now=T0 + 61)
+    assert job is not None and job.kind == "dispatch" and job.payload == {"actor": "x"}
+
+
+def test_arm_leaves_a_waiting_or_running_job_alone(store: JobStore) -> None:
+    store.arm("dispatch", "a", {"n": 1}, delay=60, now=T0)
+    store.arm("dispatch", "a", {"n": 2}, delay=0, now=T0)  # already armed: ignored
+
+    assert store.claim("w1", LEASE, now=T0 + 1) is None
+    job = store.claim("w1", LEASE, now=T0 + 61)
+    assert job is not None and job.payload == {"n": 1}
+    store.arm("dispatch", "a", {"n": 3}, delay=0, now=T0 + 62)  # running: still ignored
+    assert store.get("dispatch", "a")["status"] == "running"  # type: ignore[index]
+
+
+def test_finish_closes_a_job_whoever_holds_it(store: JobStore) -> None:
+    store.arm("dispatch", "a", {}, delay=60, now=T0)
+
+    assert store.finish("dispatch", "a") is True
+    assert store.finish("dispatch", "a") is False  # already done
+    assert store.finish("dispatch", "missing") is False
+    assert store.claim("w1", LEASE, now=T0 + 120) is None
+
+
+def test_arm_reopens_a_finished_or_dead_job(store: JobStore) -> None:
+    store.arm("dispatch", "a", {"n": 1}, delay=0, now=T0)
+    store.finish("dispatch", "a")
+    store.arm("dispatch", "a", {"n": 2}, delay=0, now=T0 + 1)  # e.g. a second retry-dispatch
+
+    job = store.claim("w1", LEASE, now=T0 + 2)
+    assert job is not None and job.payload == {"n": 2} and job.attempts == 1
+
+    for tick in range(2):  # run out of attempts to reach `dead`
+        store.fail(job.id, "w1", "boom", 0, now=T0 + 3 + tick)
+        job = store.claim("w1", LEASE, now=T0 + 10 + tick) or job
+    store.fail(job.id, "w1", "boom", 0, now=T0 + 20)
+    assert store.get("dispatch", "a")["status"] == "dead"  # type: ignore[index]
+    store.arm("dispatch", "a", {"n": 3}, delay=0, now=T0 + 30)
+    reopened = store.claim("w2", LEASE, now=T0 + 31)
+    assert reopened is not None and reopened.payload == {"n": 3} and reopened.attempts == 1
+
+
+def test_expedite_makes_only_waiting_jobs_of_that_kind_due(store: JobStore) -> None:
+    store.arm("dispatch", "a", {}, delay=600, now=T0)
+    store.arm("dispatch", "b", {}, delay=600, now=T0)
+    store.arm("other", "c", {}, delay=600, now=T0)
+    store.finish("dispatch", "b")
+
+    assert store.expedite("dispatch", now=T0 + 1) == 1
+    job = store.claim("w1", LEASE, now=T0 + 2)
+    assert job is not None and (job.kind, job.run_id) == ("dispatch", "a")
+    assert store.claim("w1", LEASE, now=T0 + 3) is None  # "other" is still in the future

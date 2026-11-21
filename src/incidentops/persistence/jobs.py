@@ -43,6 +43,21 @@ class JobStore(Protocol):
         now: float | None = None,
     ) -> bool: ...
 
+    def arm(
+        self,
+        kind: str,
+        run_id: str,
+        payload: dict[str, Any],
+        *,
+        delay: float = 0.0,
+        max_attempts: int = 3,
+        now: float | None = None,
+    ) -> None: ...
+
+    def finish(self, kind: str, run_id: str, now: float | None = None) -> bool: ...
+
+    def expedite(self, kind: str, now: float | None = None) -> int: ...
+
     def claim(
         self, worker_id: str, lease_seconds: float, now: float | None = None
     ) -> Job | None: ...
@@ -113,6 +128,59 @@ class _SqlJobStore:
             (kind, run_id, json.dumps(payload, default=str), max_attempts, now, stamp, stamp),
         )
         return bool(count == 1)
+
+    def arm(
+        self,
+        kind: str,
+        run_id: str,
+        payload: dict[str, Any],
+        *,
+        delay: float = 0.0,
+        max_attempts: int = 3,
+        now: float | None = None,
+    ) -> None:
+        """Record an intent to do something later (the outbox): create the job, due in ``delay``
+        seconds, or re-open one that is ``done`` or ``dead``. A job that is already waiting or
+        running is left alone. The caller does the work itself and calls ``finish``; the job only
+        survives, and is picked up by a worker, if the caller never got that far."""
+        now, stamp = (time.time() if now is None else now), _now()
+        self._run(
+            "INSERT INTO jobs (kind, run_id, payload_json, status, max_attempts, run_after, "
+            "created_at, updated_at) VALUES (?, ?, ?, 'queued', ?, ?, ?, ?) "
+            "ON CONFLICT (kind, run_id) DO UPDATE SET status='queued', attempts=0, "
+            "payload_json=excluded.payload_json, run_after=excluded.run_after, "
+            "max_attempts=excluded.max_attempts, locked_by=NULL, locked_until=NULL, "
+            "last_error=NULL, updated_at=excluded.updated_at "
+            "WHERE jobs.status IN ('done', 'dead')",
+            (
+                kind,
+                run_id,
+                json.dumps(payload, default=str),
+                max_attempts,
+                now + delay,
+                stamp,
+                stamp,
+            ),
+        )
+
+    def finish(self, kind: str, run_id: str, now: float | None = None) -> bool:
+        """The work was done by the caller: close the job whoever (if anyone) holds it."""
+        _, count = self._run(
+            "UPDATE jobs SET status='done', locked_by=NULL, locked_until=NULL, updated_at=? "
+            "WHERE kind=? AND run_id=? AND status IN ('queued', 'running')",
+            (_now(), kind, run_id),
+        )
+        return bool(count == 1)
+
+    def expedite(self, kind: str, now: float | None = None) -> int:
+        """Make waiting jobs of a kind due now (at startup, whoever armed them is gone)."""
+        now = time.time() if now is None else now
+        _, count = self._run(
+            "UPDATE jobs SET run_after=?, updated_at=? "
+            "WHERE kind=? AND status='queued' AND run_after > ?",
+            (now, _now(), kind, now),
+        )
+        return int(count)
 
     # -- consuming -------------------------------------------------------------------------
     def claim(self, worker_id: str, lease_seconds: float, now: float | None = None) -> Job | None:

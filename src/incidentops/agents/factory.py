@@ -3,6 +3,7 @@
 from incidentops.agents.resilient import ResilientProvider
 from incidentops.core.config import Settings
 from incidentops.core.logging import get_logger
+from incidentops.core.resilience import CircuitBreaker
 from incidentops.orchestration.factory import RoleGraphProvider, wants_claude
 
 log = get_logger(__name__)
@@ -20,6 +21,13 @@ def build_provider(settings: Settings) -> ResilientProvider:
             provider=primary.name,
             topology=settings.ai_topology,
         )
-        return ResilientProvider(primary)
+        return ResilientProvider(
+            primary,
+            breaker=CircuitBreaker(
+                "model",
+                failure_threshold=settings.breaker_failure_threshold,
+                reset_seconds=settings.breaker_reset_seconds,
+            ),
+        )
     log.info("ai.provider", provider="rules")
     return ResilientProvider(None)

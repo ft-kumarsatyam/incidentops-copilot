@@ -39,6 +39,10 @@ flowchart LR
 Python never holds Slack or Jira credentials. It sends a bearer-token
 request to n8n, which owns the integrations.
 
+This diagram shows the default single-instance setup. Workers, Postgres, Redis, the identity
+layer, metrics and the Jev advisor are in
+[END_TO_END_ARCHITECTURE.md](END_TO_END_ARCHITECTURE.md).
+
 ## Components
 
 | Component | Where | Responsibility |

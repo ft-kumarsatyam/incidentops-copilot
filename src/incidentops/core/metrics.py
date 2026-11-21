@@ -5,7 +5,11 @@ One registry per ``Metrics`` instance (not the global default), so several apps 
 template, never the raw path, and never an incident id.
 """
 
-from typing import Any
+from collections.abc import Callable, Iterator
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from incidentops.core.resilience import CircuitBreaker
 
 CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
@@ -59,6 +63,9 @@ class Metrics:
             ["result"],
             registry=registry,
         )
+        self._breakers: list[CircuitBreaker] = []
+        self._jev: list[Callable[[], dict[str, float]]] = []
+        registry.register(_DependencyCollector(self._breakers, self._jev))
         Gauge(
             "incidentops_build_info",
             "Constant 1; the version is in the label.",
@@ -88,7 +95,71 @@ class Metrics:
         if self.enabled:
             self._dispatches.labels(result=result).inc()
 
+    def watch_breaker(self, breaker: "CircuitBreaker | None") -> None:
+        """Export a breaker's state and counters, read at scrape time."""
+        if self.enabled and breaker is not None:
+            self._breakers.append(breaker)
+
+    def watch_jev(self, read: Callable[[], dict[str, float]]) -> None:
+        """Export Jev call, error and token counters (``read`` returns their current values)."""
+        if self.enabled:
+            self._jev.append(read)
+
     def render(self) -> bytes:
         from prometheus_client import generate_latest
 
         return bytes(generate_latest(self._registry)) if self.enabled else b""
+
+
+_STATE_VALUE = {"closed": 0, "half_open": 1, "open": 2}
+
+
+class _DependencyCollector:
+    """Reads breaker and Jev counters when Prometheus scrapes, so they need no update hooks."""
+
+    def __init__(self, breakers: "list[CircuitBreaker]", jev: list[Callable[[], dict[str, float]]]):
+        self._breakers = breakers
+        self._jev = jev
+
+    def collect(self) -> Iterator[Any]:
+        from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily
+
+        state = GaugeMetricFamily(
+            "incidentops_circuit_state",
+            "Circuit breaker state per dependency: 0 closed, 1 half-open, 2 open.",
+            labels=["name"],
+        )
+        opened = CounterMetricFamily(
+            "incidentops_circuit_opened",
+            "Times a dependency's circuit breaker opened.",
+            labels=["name"],
+        )
+        skipped = CounterMetricFamily(
+            "incidentops_circuit_short_circuited",
+            "Calls refused at once because a circuit was open.",
+            labels=["name"],
+        )
+        for breaker in self._breakers:
+            state.add_metric([breaker.name], _STATE_VALUE[breaker.state])
+            opened.add_metric([breaker.name], breaker.opened_total)
+            skipped.add_metric([breaker.name], breaker.short_circuited_total)
+        yield state
+        yield opened
+        yield skipped
+
+        calls = CounterMetricFamily("incidentops_jev_calls", "Calls made to Jev.")
+        errors = CounterMetricFamily("incidentops_jev_errors", "Jev calls that failed.")
+        tokens = CounterMetricFamily(
+            "incidentops_jev_tokens", "Jev tokens by direction.", labels=["direction"]
+        )
+        totals = {"calls": 0.0, "errors": 0.0, "input_tokens": 0.0, "output_tokens": 0.0}
+        for read in self._jev:
+            for key, value in read().items():
+                totals[key] += value
+        calls.add_metric([], totals["calls"])
+        errors.add_metric([], totals["errors"])
+        tokens.add_metric(["input"], totals["input_tokens"])
+        tokens.add_metric(["output"], totals["output_tokens"])
+        yield calls
+        yield errors
+        yield tokens

@@ -24,6 +24,8 @@ The UI reads the stream with `fetch` rather than `EventSource` so it can send
 ## Consequences
 
 - Plain HTTP, works through most proxies. Disable proxy buffering (`X-Accel-Buffering: no` is set).
-- The bus is in-process, so with several API replicas a client only sees events
-  from the replica it is connected to. Replace the bus with Redis pub/sub or
-  Postgres `LISTEN/NOTIFY` when scaling out. Clients already fall back to polling.
+- The default bus is in-process, so with several API replicas a client only sees events
+  from the replica it is connected to. Set `REDIS_URL` to use the Redis pub/sub bus
+  (`api/events.py`); clients also fall back to polling. Pub/sub does not replay missed
+  events; Redis Streams with `Last-Event-ID` is on the roadmap
+  ([ADR 012](012-target-architecture-roadmap.md)).

@@ -2,7 +2,8 @@ import { Loader2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { SamplePicker } from "../components/SamplePicker";
-import { useCreateIncident } from "../hooks/useIncidents";
+import { EmptyState } from "../components/States";
+import { useCan, useCreateIncident } from "../hooks/useIncidents";
 import { useSettings } from "../lib/settings";
 import type { NewIncident } from "../lib/types";
 
@@ -42,6 +43,7 @@ export function NewIncidentPage() {
   const navigate = useNavigate();
   const { actor } = useSettings();
   const [error, setError] = useState<string | null>(null);
+  const can = useCan();
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -51,6 +53,14 @@ export function NewIncidentPage() {
       onError: (failure) => setError(failure.message),
     });
   };
+
+  if (!can("incident:create")) {
+    return (
+      <EmptyState title="You can't report incidents">
+        Your role is read-only. Ask an administrator for the responder role if you need to report one.
+      </EmptyState>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">

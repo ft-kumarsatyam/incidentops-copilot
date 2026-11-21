@@ -16,9 +16,10 @@ import httpx
 
 from incidentops.core.config import Settings
 from incidentops.security.auth import AuthError
-from incidentops.security.principal import ROLES, Principal
+from incidentops.security.principal import Principal
 
 _TENANT = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_ROLE_NAME = re.compile(r"[A-Za-z0-9._-]{1,64}")
 _FORBIDDEN_ALGORITHMS = {"none", "HS256", "HS384", "HS512"}
 _JWKS_TTL = 3600.0
 _REFETCH_MIN_INTERVAL = 30.0  # an unknown `kid` triggers at most one refetch per this long
@@ -127,7 +128,11 @@ class OidcVerifier:
         raw_roles = _claim(claims, settings.oidc_roles_claim)
         if isinstance(raw_roles, str):
             raw_roles = raw_roles.replace(",", " ").split()
-        roles = frozenset(r for r in (raw_roles or []) if isinstance(r, str) and r in ROLES)
+        # Built-in names and custom role names pass; a custom name only grants anything if this
+        # tenant defined it (see Authenticator._with_grants).
+        roles = frozenset(
+            r for r in (raw_roles or []) if isinstance(r, str) and _ROLE_NAME.fullmatch(r)
+        )
         tenant = _claim(claims, settings.oidc_tenant_claim) or settings.default_tenant
         if not isinstance(tenant, str) or not _TENANT.match(tenant):
             raise AuthError("token carries an invalid tenant")

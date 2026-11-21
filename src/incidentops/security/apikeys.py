@@ -39,8 +39,16 @@ def issue_key(
     expires_days: int | None = None,
 ) -> tuple[dict[str, object], str]:
     """Create a key. Returns (its stored description, the token to hand over once)."""
-    if not roles or any(role not in ROLES for role in roles):
-        raise ValueError(f"roles must be a non-empty subset of {', '.join(ROLES)}")
+    if not roles:
+        raise ValueError("a key needs at least one role")
+    custom = sorted({role for role in roles if role not in ROLES})
+    known = {row["name"] for row in repo.role_get_many(tenant, custom)}
+    unknown = [role for role in custom if role not in known]
+    if unknown:
+        raise ValueError(
+            f"unknown roles: {', '.join(unknown)}: use {', '.join(ROLES)} or a custom role "
+            f"defined in tenant {tenant!r}"
+        )
     key_id, secret = secrets.token_hex(_ID_LENGTH // 2), secrets.token_urlsafe(32)
     expires = (
         (datetime.now(UTC) + timedelta(days=expires_days)).isoformat(timespec="milliseconds")

@@ -26,6 +26,7 @@ from incidentops.core.metrics import Metrics
 from incidentops.core.redact import redact
 from incidentops.core.signing import host_allowed
 from incidentops.core.telemetry import span
+from incidentops.decision import JevAdvisor, JevClient
 from incidentops.persistence.audit import ChainReport
 from incidentops.persistence.base import Repo
 from incidentops.persistence.factory import open_storage
@@ -56,6 +57,7 @@ class IncidentService:
         dispatcher: Dispatcher | None = None,
         provider: TriageProvider | None = None,
         metrics: Metrics | None = None,
+        jev: JevClient | None = None,
     ) -> None:
         self.settings = settings
         self.metrics = metrics or Metrics(False)
@@ -72,8 +74,13 @@ class IncidentService:
         # Set by whoever runs workers in this process, to start a queued job without waiting
         # for the next poll.
         self.on_enqueue: Callable[[], None] | None = None
+        # One client for the workflow advisor and POST /decisions, so usage is counted together.
+        self.jev: JevClient | None = jev or (JevClient(settings) if settings.jev_enabled else None)
         self._graph = build_incident_graph(
-            settings, self._storage.checkpointer, provider or build_provider(settings)
+            settings,
+            self._storage.checkpointer,
+            provider or build_provider(settings),
+            advisor=JevAdvisor(self.jev, settings) if self.jev else None,
         )
 
     def _invoke(self, graph_input: Any, config: Any) -> Any:
@@ -83,6 +90,8 @@ class IncidentService:
         )
 
     def close(self) -> None:
+        if self.jev is not None:
+            self.jev.close()
         self.events.close()
         self._storage.close()
 

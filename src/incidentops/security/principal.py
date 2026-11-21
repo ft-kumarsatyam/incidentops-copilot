@@ -5,7 +5,7 @@ Roles are cumulative: each one can do everything the roles before it can.
     viewer     read incidents, their audit trail and the live stream
     responder  + open incidents, retry a failed analysis or dispatch, see the queue
     approver   + approve or reject proposed actions (the AI and responders only *propose*)
-    admin      + manage API keys, search/export/verify the audit log
+    admin      + manage API keys, search/export/verify the audit log, see decision-model usage
 """
 
 from dataclasses import dataclass
@@ -18,6 +18,8 @@ PERMISSIONS: dict[str, str] = {
     "incident:retry": "responder",
     "queue:read": "responder",
     "incident:decide": "approver",
+    "decision:invoke": "responder",  # ask the Jev decision model a question (POST /decisions)
+    "decision:admin": "admin",  # its configuration and usage (GET /decisions/status)
     "audit:search": "admin",
     "keys:manage": "admin",
 }

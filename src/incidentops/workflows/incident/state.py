@@ -40,6 +40,7 @@ class IncidentState(TypedDict, total=False):
     hypotheses: list[str]
     ai: dict[str, Any]
     ai_review: dict[str, Any]
+    jev: dict[str, Any]
     conflicts: list[str]
     guardrail_flags: list[str]
     retries: int

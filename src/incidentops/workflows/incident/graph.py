@@ -7,6 +7,7 @@ from langgraph.graph import END, START, StateGraph
 
 from incidentops.agents.resilient import TriageProvider
 from incidentops.core.config import Settings
+from incidentops.decision import JevAdvisor
 from incidentops.workflows.incident.nodes import (
     finalize,
     intake,
@@ -22,12 +23,13 @@ def build_incident_graph(
     settings: Settings,
     checkpointer: BaseCheckpointSaver[Any],
     provider: TriageProvider,
+    advisor: JevAdvisor | None = None,
 ) -> Any:
     graph = StateGraph(IncidentState)
     graph.add_node("intake", intake)
     # LangGraph's generic inference loses the TypedDict type for closure-built nodes.
     graph.add_node("research", make_research(settings))  # type: ignore[arg-type]
-    graph.add_node("assess", make_assess(provider))  # type: ignore[arg-type]
+    graph.add_node("assess", make_assess(provider, advisor))  # type: ignore[arg-type]
     graph.add_node("critic", make_critic(provider))  # type: ignore[arg-type]
     graph.add_node("finalize", finalize)
     graph.add_edge(START, "intake")

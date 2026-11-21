@@ -5,6 +5,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- Jev (TypeSafe System One) decision model as an advisor: `JEV_ENABLED`, `JEV_API_KEY`, `POST /decisions`
+  and `GET /decisions/status`, with new RBAC permissions `decision:invoke` (responder) and
+  `decision:admin` (admin), a tenant allow-list, and audited calls. In triage it only adds conflicts
+  or flags; see ADR 011.
 - `CHECKPOINT_DURABILITY` (`async` default, `sync`, `exit`): when LangGraph saves workflow
   checkpoints. `exit` saves only when a run finishes or pauses for approval, which cuts the
   database commits per incident (measured in the load test) at the cost of restarting a run from

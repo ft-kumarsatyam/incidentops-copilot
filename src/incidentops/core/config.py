@@ -21,6 +21,7 @@ _SECRET_FIELDS = (
     "metrics_token",
     "webhook_signing_secret",
     "inbound_signing_secret",
+    "jev_api_key",
 )
 
 
@@ -159,6 +160,20 @@ class Settings(BaseSettings):
     ai_timeout_seconds: float = 45.0
     ai_max_output_tokens: int = 4000
     rolegraph_max_parallel: int = 4
+
+    # Jev (TypeSafe System One): a fast decision model used as an advisor, never as the authority.
+    # In the workflow it can only add a conflict or a guardrail flag (so a person looks); it
+    # cannot lower a severity or waive a gate. POST /decisions exposes it to callers who hold
+    # the decision:invoke permission. Only redacted text leaves the process.
+    jev_enabled: bool = False
+    jev_api_key: str | None = None
+    jev_base_url: str = "https://api.typesafe.ai"
+    jev_model: str = "jev-latest"
+    jev_timeout_seconds: float = 5.0
+    jev_min_confidence: float = 0.7  # below this a severity disagreement is ignored
+    jev_injection_threshold: float = 0.8  # noul at or above this flags the report
+    # Tenants allowed to call POST /decisions. Empty means every tenant.
+    jev_allowed_tenants: list[str] = Field(default_factory=list)
 
     # Optional MCP read bridge during research (writes stay on n8n).
     mcp_enabled: bool = False

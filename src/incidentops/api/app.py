@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from incidentops import __version__
 from incidentops.api.errors import install_error_handlers
 from incidentops.api.middleware import install_middleware
-from incidentops.api.routes import admin, audit, health, incidents
+from incidentops.api.routes import admin, audit, decisions, health, incidents
 from incidentops.api.routes import metrics as metrics_routes
 from incidentops.core.config import Settings
 from incidentops.core.logging import configure_logging, get_logger
@@ -107,6 +107,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(incidents.queue_router)
     app.include_router(audit.router)
     app.include_router(admin.router)
+    app.include_router(decisions.router)
     if settings.metrics_enabled:
         app.include_router(metrics_routes.router)
 

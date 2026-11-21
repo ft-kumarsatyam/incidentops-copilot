@@ -18,6 +18,7 @@ from incidentops.agents.resilient import TriageProvider
 from incidentops.agents.schemas import AIResult, ProposedAction, Triage, TriageContext
 from incidentops.core.config import Settings
 from incidentops.core.logging import get_logger
+from incidentops.decision import JevAdvice, JevAdvisor, JevError
 from incidentops.rag import RunbookRetriever
 from incidentops.tools.broker import retrieve_evidence
 from incidentops.tools.github import normalize_github
@@ -107,14 +108,61 @@ def make_research(settings: Settings, retriever: RunbookRetriever | None = None)
     return research
 
 
-def make_assess(provider: TriageProvider) -> Node:
+def _jev_review(
+    advisor: JevAdvisor, state: IncidentState, context: TriageContext, severity: str
+) -> tuple[dict[str, Any], list[str], list[str], list[str]]:
+    """Ask Jev for a second opinion: (state entry, conflicts, guardrail flags, timeline).
+
+    It can only add a reason for a person to look. It never changes the severity and never
+    clears a conflict, and a failure just means no advice. Advice received on an earlier research
+    pass is reused (a retry does not pay for the same question twice), but the conflict it raises
+    is re-derived every pass, so retrying cannot make it go away.
+    """
+    timeline: list[str] = []
+    previous = state.get("jev") or {}
+    if previous.get("status") == "ok":
+        advice = JevAdvice.from_state(previous)
+    else:
+        try:
+            advice = advisor.advise(context)
+        except JevError as error:
+            log.warning("jev.unavailable", error=str(error))
+            unavailable = {"status": "unavailable", "reason": str(error)}
+            return unavailable, [], [], ["jev advisor unavailable"]
+        timeline.append(f"jev advises {advice.severity} ({advice.severity_confidence:.0%})")
+    conflicts: list[str] = []
+    flags: list[str] = []
+    if advice.severity != severity and advice.severity_confidence >= advisor.min_confidence:
+        conflicts.append(
+            f"jev rates {advice.severity} ({advice.severity_confidence:.0%}); "
+            f"triage rated {severity}"
+        )
+    if advice.injection >= advisor.injection_threshold:
+        flags.append("jev:injection")
+        if not previous:
+            timeline.append("jev suspects instructions aimed at the AI in the report")
+    return advice.to_state(), conflicts, flags, timeline
+
+
+def make_assess(provider: TriageProvider, advisor: JevAdvisor | None = None) -> Node:
     """Triage agent: severity, hypotheses and grounded actions (validated by guardrails)."""
 
     def assess(state: IncidentState) -> dict[str, Any]:
         context = context_from_state(state)
         result = provider.triage(context)
         triage = result.value
-        conflicts = list(dict.fromkeys([*triage.conflicts, *deterministic_conflicts(context)]))
+        extra: dict[str, Any] = {}
+        jev_conflicts: list[str] = []
+        jev_flags: list[str] = []
+        jev_timeline: list[str] = []
+        if advisor is not None:
+            entry, jev_conflicts, jev_flags, jev_timeline = _jev_review(
+                advisor, state, context, triage.severity
+            )
+            extra["jev"] = entry
+        conflicts = list(
+            dict.fromkeys([*triage.conflicts, *deterministic_conflicts(context), *jev_conflicts])
+        )
         # Missing information caps confidence no matter how sure the model sounds.
         confidence = min(triage.confidence, 1.0 - 0.15 * len(context.missing_fields))
         return {
@@ -126,9 +174,11 @@ def make_assess(provider: TriageProvider) -> Node:
             "proposed_actions": [action.description for action in triage.actions],
             "action_items": [action.model_dump() for action in triage.actions],
             "ai": _ai_summary(result),
-            "guardrail_flags": context.guardrail_flags,
+            **extra,
+            "guardrail_flags": [*context.guardrail_flags, *jev_flags],
             "timeline": [
                 f"assessed as {triage.severity} by {result.provider}",
+                *jev_timeline,
                 *(
                     [f"possible prompt injection in: {', '.join(context.guardrail_flags)}"]
                     if context.guardrail_flags

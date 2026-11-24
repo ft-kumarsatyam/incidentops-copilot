@@ -52,7 +52,7 @@ jobs:
           uv venv
           uv pip install -e ".[dev,rag]"
       - name: Cache the embedding model
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .fastembed-cache
           key: fastembed-bge-small-en-v1.5
